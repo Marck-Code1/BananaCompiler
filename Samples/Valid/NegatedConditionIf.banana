@@ -1,0 +1,5 @@
+start
+  if !(x < 10) then
+    write x
+  endif
+end

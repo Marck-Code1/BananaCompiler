@@ -1,0 +1,5 @@
+start
+  while x < 10
+    write x
+  endwhile
+end

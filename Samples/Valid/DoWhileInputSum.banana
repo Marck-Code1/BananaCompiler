@@ -1,0 +1,10 @@
+start
+  sum = 0
+  count = 1
+  do
+    read value
+    sum = sum + value
+    count = count + 1
+  end while count < 10
+  write sum
+end

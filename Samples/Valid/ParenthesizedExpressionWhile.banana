@@ -1,0 +1,7 @@
+start
+  x = (1 + 2)
+  move 3,4
+  while (x + 1) < 10 do
+    write x
+  endwhile
+end

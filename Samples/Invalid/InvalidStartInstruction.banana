@@ -1,0 +1,12 @@
+# start value no es valido
+
+start
+  x = 0
+  count = 1
+  do
+    start value
+    x = x + value
+    count = count + 1
+  end while count < 10
+  write x
+end

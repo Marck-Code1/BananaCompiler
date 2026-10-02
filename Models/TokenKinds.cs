@@ -1,0 +1,52 @@
+namespace BananaCompiler.Models;
+
+public static class TokenKinds
+{
+    public const string Error = "ERROR";
+    public const string EndOfFile = "EOF";
+    public const string Identifier = "ID";
+    public const string Number = "CN";
+    public const string RealNumber = "CNR";
+    public const string ScientificNumber = "CNE";
+    public const string String = "CAD";
+    public const string Plus = "OA1";
+    public const string Minus = "OA2";
+    public const string Multiply = "OA3";
+    public const string Divide = "OA4";
+    public const string Power = "OA5";
+    public const string Modulo = "OA6";
+    public const string LessThan = "OR1";
+    public const string LessThanOrEqual = "OR2";
+    public const string GreaterThan = "OR3";
+    public const string GreaterThanOrEqual = "OR4";
+    public const string Equal = "OR5";
+    public const string NotEqual = "OR6";
+    public const string And = "OL1";
+    public const string Or = "OL2";
+    public const string Not = "OL3";
+    public const string Assignment = "OPA";
+    public const string LeftParen = "CE5";
+    public const string RightParen = "CE6";
+    public const string Comma = "CE7";
+    public const string Break = "PR1";
+    public const string Clear = "PR2";
+    public const string Do = "PR3";
+    public const string Else = "PR4";
+    public const string End = "PR5";
+    public const string EndFor = "PR6";
+    public const string EndIf = "PR7";
+    public const string EndWhile = "PR8";
+    public const string False = "PR9";
+    public const string For = "PR10";
+    public const string From = "PR11";
+    public const string If = "PR12";
+    public const string Move = "PR13";
+    public const string Rand = "PR14";
+    public const string Read = "PR15";
+    public const string Start = "PR16";
+    public const string Then = "PR17";
+    public const string To = "PR18";
+    public const string True = "PR19";
+    public const string While = "PR20";
+    public const string Write = "PR21";
+}

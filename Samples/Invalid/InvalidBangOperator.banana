@@ -1,0 +1,7 @@
+# ! solo se aplica a un operando no a dos
+
+start
+  if x ! 10 then
+    write x
+  endif
+end

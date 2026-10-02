@@ -1,0 +1,5 @@
+start
+  if x < then
+    write x
+  endif
+end

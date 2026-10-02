@@ -1,0 +1,31 @@
+# Compilación y paquetes generados por .NET
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+packages/
+
+# Configuración local de Visual Studio y otros IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Resultados de pruebas y cobertura
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Archivos temporales y del sistema
+*.log
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+
+# Archivos auxiliares de SQLite (data.db es necesario para el lexer)
+*.db-shm
+*.db-wal
+*.db-journal

@@ -1,0 +1,7 @@
+start
+  x=0
+  if !(x<10) then
+    write x
+    sum = 15+15+15-20
+  endif
+end

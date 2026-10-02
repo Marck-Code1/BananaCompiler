@@ -1,0 +1,7 @@
+start
+  total = 0
+  for i from 1 to 5 do
+    total = total + i
+  endfor
+  write total
+end

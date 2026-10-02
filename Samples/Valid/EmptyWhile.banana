@@ -1,0 +1,4 @@
+start
+  while x < 10 do
+  endwhile
+end
