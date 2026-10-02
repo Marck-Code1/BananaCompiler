@@ -6,6 +6,7 @@ public class Token
     public string Lexeme { get; set; }
     public int Line { get; set; }
     public int Column { get; set; }
+    public bool IsSynthetic { get; init; }
 
 
     public Token(string tipo, string valor, int linea = 0, int columna = 0)

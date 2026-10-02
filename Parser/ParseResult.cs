@@ -14,11 +14,20 @@ public sealed class ParseResult
         SyntaxTree = syntaxTree;
         ScopedSymbols = scopedSymbols;
         SemanticPileLog = semanticPileLog;
+        Diagnostics = errors.Select(error => new Diagnostic(DiagnosticKind.Syntax,
+                error.Code, error.Token, error.Format(), error.RelatedToken))
+            .Concat(semanticErrors.Select(error => new Diagnostic(DiagnosticKind.Semantic,
+                error.Code, error.Token, error.Format())))
+            .OrderBy(diagnostic => diagnostic.Token.Line)
+            .ThenBy(diagnostic => diagnostic.Token.Column)
+            .ThenBy(diagnostic => diagnostic.Kind)
+            .ToArray();
     }
 
     public bool Success => Errors.Count == 0 && SemanticErrors.Count == 0;
     public IReadOnlyList<ParseError> Errors { get; }
     public IReadOnlyList<SemanticError> SemanticErrors { get; }
+    public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
     /// <summary>Raíz del árbol de sintaxis (S). Null solo si no se pudo construir.</summary>
     public SyntaxNode? SyntaxTree { get; }

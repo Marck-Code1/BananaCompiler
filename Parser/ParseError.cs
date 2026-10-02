@@ -1,4 +1,3 @@
-using BananaCompiler.Lexer;
 using BananaCompiler.Models;
 
 namespace BananaCompiler.Parser;
@@ -23,7 +22,7 @@ public sealed class ParseError
         ["move instruction"] = "instrucción move",
         ["argument"] = "argumento",
         ["expression"] = "expresión",
-        ["factor"] = "factor",
+        ["factor"] = "expresión",
         ["oa"] = "operación aritmética",
         ["oa term"] = "término de operación aritmética",
         ["condition"] = "condición",
@@ -82,7 +81,7 @@ public sealed class ParseError
         [TokenKinds.Write] = "'write'",
         ["instruction"] = "una instrucción",
         ["argument"] = "argumento",
-        ["factor"] = "factor",
+        ["factor"] = "una expresión (identificador, literal o '(')",
         ["expression"] = "expresión",
         ["condition"] = "condición",
         ["relational operator"] = "operador relacional",
@@ -90,19 +89,26 @@ public sealed class ParseError
         ["PR19 or PR9"] = "'true' o 'false'"
     };
 
-    public ParseError(Token token, string context)
+    public ParseError(Token token, string context, string? message = null,
+        string code = "SYN_EXPECTED_TOKEN", Token? relatedToken = null)
     {
         Token = token;
         Context = context;
+        Message = message;
+        Code = code;
+        RelatedToken = relatedToken;
     }
 
     public Token Token { get; }
+    public string? Message { get; }
+    public string Code { get; }
+    public Token? RelatedToken { get; }
     public string Context { get; private set; }
     public IReadOnlyCollection<string> Expected => expected;
 
     public ParseError Clone()
     {
-        ParseError clone = new(Token, Context);
+        ParseError clone = new(Token, Context, Message, Code, RelatedToken);
 
         foreach (string value in expected)
             clone.expected.Add(value);
@@ -120,13 +126,14 @@ public sealed class ParseError
 
     public string Format()
     {
+        if (Message is not null)
+            return Message;
+
         string expectedText = expected.Count == 0
             ? "sintaxis válida"
             : string.Join(", ", expected.Select(TranslateExpected));
 
-        string found = Token.Kind == TokenKinds.EndOfFile
-            ? "fin de archivo"
-            : $"'{Token.Lexeme}'";
+        string found = Diagnostic.DescribeToken(Token);
 
         string contextText = TranslateContext(Context);
 

@@ -242,7 +242,7 @@ namespace BananaCompiler
             // LineaSintactica
             // 
             LineaSintactica.FillWeight = 30F;
-            LineaSintactica.HeaderText = "Linea";
+            LineaSintactica.HeaderText = "Línea:Columna";
             LineaSintactica.MinimumWidth = 8;
             LineaSintactica.Name = "LineaSintactica";
             LineaSintactica.ReadOnly = true;

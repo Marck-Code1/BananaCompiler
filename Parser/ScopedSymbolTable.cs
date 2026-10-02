@@ -16,6 +16,8 @@ public sealed class ScopedSymbolTable
 
     private readonly List<SymbolAssignment> entries = [];
     private readonly List<Scope> scopeStack = [new("global")];
+    private readonly Stack<int> transactionStarts = [];
+    private readonly List<Action> undoActions = [];
 
     private sealed class Scope(string path)
     {
@@ -66,6 +68,12 @@ public sealed class ScopedSymbolTable
         var entry = new SymbolAssignment(name, dataType, value, CurrentScope, Size: SizeOf(dataType, value));
         scope.Symbols.Add(name, entries.Count);
         entries.Add(entry);
+        if (transactionStarts.Count > 0)
+            undoActions.Add(() =>
+            {
+                scope.Symbols.Remove(name);
+                entries.RemoveAt(entries.Count - 1);
+            });
         return entry;
     }
 
@@ -90,7 +98,29 @@ public sealed class ScopedSymbolTable
             Size = SizeOf(type, value),
         };
         entries[index] = updated;
+        if (transactionStarts.Count > 0)
+            undoActions.Add(() => entries[index] = previous);
         return updated;
+    }
+
+    // Cada instrucción confirma sus cambios o los revierte al fallar. Las
+    // instrucciones anidadas conservan su registro hasta confirmar el bloque.
+    // El registro contiene solo cambios realizados, no copias de toda la tabla.
+    internal void BeginTransaction() => transactionStarts.Push(undoActions.Count);
+
+    internal void CommitTransaction()
+    {
+        transactionStarts.Pop();
+        if (transactionStarts.Count == 0)
+            undoActions.Clear();
+    }
+
+    internal void RollbackTransaction()
+    {
+        int start = transactionStarts.Pop();
+        for (int i = undoActions.Count - 1; i >= start; i--)
+            undoActions[i]();
+        undoActions.RemoveRange(start, undoActions.Count - start);
     }
 
     /// <summary>Entrada de un identificador visible, o null si no existe.</summary>

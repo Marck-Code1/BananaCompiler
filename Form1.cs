@@ -94,6 +94,9 @@ namespace BananaCompiler
                     handleErrorToken(token.Line, token.Lexeme);
                     handleToken(token.Kind);
                     break;
+                case TokenKinds.EndOfFile:
+                    lexicalTokens.Add(token);
+                    break;
                 default:
                     lexicalTokens.Add(token);
                     handleToken(token.Kind);
@@ -157,7 +160,7 @@ namespace BananaCompiler
             clearAll();
 
             var lexer = new LexicalAnalyzer(transitionTable);
-            var tokens = lexer.Tokenize(txtCode.Text);
+            var tokens = lexer.Tokenize(txtCode.Text, includeEndOfFile: true);
             var tokenIndex = 0;
 
             for (int i = 0; i < txtCode.Lines.Count; i++)
@@ -200,11 +203,12 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
             var result = parser.Parse();
             updateSimbolos(result.ScopedSymbols);
 
-            foreach (var error in result.Errors)
-                dgErroresSintacticos.Rows.Add(error.Token.Line, error.Format());
-
-            foreach (SemanticError error in result.SemanticErrors)
-                dgErroresSintacticos.Rows.Add(error.Token.Line, $"Semántico: {error.Format()}");
+            foreach (Diagnostic diagnostic in result.Diagnostics)
+            {
+                string category = diagnostic.Kind == DiagnosticKind.Syntax ? "Sintáctico" : "Semántico";
+                dgErroresSintacticos.Rows.Add($"{diagnostic.Token.Line}:{diagnostic.Token.Column}",
+                    $"{category} [{diagnostic.Code}]: {diagnostic.Message}");
+            }
 
             treeInfo = result.SyntaxTree is null
                 ? "Árbol: no construido"

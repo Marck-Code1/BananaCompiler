@@ -95,6 +95,14 @@ public sealed class SemanticPile
             entries.RemoveAt(entries.Count - 1);
     }
 
+    public void RestoreTrace(int stepsDepth, int snapshotsDepth)
+    {
+        if (steps.Count > stepsDepth)
+            steps.RemoveRange(stepsDepth, steps.Count - stepsDepth);
+        if (snapshots.Count > snapshotsDepth)
+            snapshots.RemoveRange(snapshotsDepth, snapshots.Count - snapshotsDepth);
+    }
+
     public void Clear()
     {
         entries.Clear();

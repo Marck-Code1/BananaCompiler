@@ -1,4 +1,3 @@
-using BananaCompiler.Lexer;
 using BananaCompiler.Models;
 
 namespace BananaCompiler.Parser;
@@ -15,12 +14,16 @@ public sealed class TopDownParser
     private readonly SemanticPile semanticPile = new();
     private readonly List<string> semanticPileLog = [];
     private readonly ScopedSymbolTable symbolTable = new();
+    private readonly List<BlockContext> blocks = [];
     private int position;
     private int loopDepth;
+    private int expressionDepth;
     private ParseError? bestError;
     private Token? assignmentToken;
     private bool assignmentExpressionIsSimple;
     private SyntaxNode? syntaxRoot;
+
+    private sealed record BlockContext(Token Opening, HashSet<string> Boundaries);
 
     /// <summary>Raíz del árbol de sintaxis construido durante el parseo (S).</summary>
     public SyntaxNode? SyntaxRoot => syntaxRoot;
@@ -148,17 +151,31 @@ public sealed class TopDownParser
 
     private void ExitScope() => symbolTable.PopScope();
 
+    private T InBlock<T>(Token opening, HashSet<string> boundaries, Func<T> parse)
+    {
+        blocks.Add(new BlockContext(opening, boundaries));
+        try
+        {
+            return parse();
+        }
+        finally
+        {
+            blocks.RemoveAt(blocks.Count - 1);
+        }
+    }
+
     // S -> INICIO
     // INICIO -> PR16 INS PR5
     private void ParseStartSymbol()
     {
         InContext("program", () =>
         {
-            Token startToken = Current;
-            Expect(TokenKinds.Start);
-            SyntaxNode insNode = ParseInstructions([TokenKinds.End, TokenKinds.EndOfFile]);
-            Token endToken = Current;
-            Expect(TokenKinds.End);
+            Token startToken = ReadSeparator(TokenKinds.Start, Current);
+            (SyntaxNode insNode, Token endToken) = InBlock(startToken, [TokenKinds.End], () =>
+            {
+                SyntaxNode instructions = ParseInstructions([TokenKinds.End]);
+                return (instructions, ReadClosing(TokenKinds.End, startToken));
+            });
 
             var inicio = new SyntaxNode("INICIO", null) { Line = startToken.Line, Column = startToken.Column };
             inicio.AddLeaf(TokenKinds.Start, startToken);
@@ -178,30 +195,64 @@ public sealed class TopDownParser
             var listNode = new SyntaxNode("INS", null) { Line = Current.Line, Column = Current.Column };
             while (!followers.Contains(CurrentKind) && CurrentKind != TokenKinds.EndOfFile)
             {
+                if (CurrentKind == TokenKinds.Else && blocks.Count > 1 &&
+                    blocks[^1].Opening.Kind == TokenKinds.If && !IsOuterBoundary(CurrentKind))
+                {
+                    int duplicate = position;
+                    AddDiagnostic(Current, "El bloque 'if' ya contiene una rama 'else'.",
+                        "SYN_DUPLICATE_ELSE", blocks[^1].Opening);
+                    position++;
+                    listNode.AddChild(CreateErrorNode(duplicate, position));
+                    continue;
+                }
+                // Un cierre externo no pertenece a este cuerpo. Se devuelve intacto
+                // para que el bloque incompleto inserte su cierre y el padre lo lea.
+                if (IsOuterBoundary(CurrentKind) || (blocks.Count > 1 && BlockTerminators.Contains(CurrentKind)))
+                    break;
+
                 if (!InstructionStarts.Contains(CurrentKind))
                 {
                     bestError = null;
-                    RecordError("instruction", "instruction list");
+                    int invalidStart = position;
+                    if (BlockTerminators.Contains(CurrentKind))
+                        bestError = new ParseError(Current, CurrentContext,
+                            $"El cierre {Diagnostic.DescribeToken(Current)} no corresponde a ningún bloque abierto.",
+                            "SYN_UNEXPECTED_CLOSER");
+                    else
+                        RecordError("instruction", "instruction list");
                     AddBestError();
+                    position++;
                     RecoverAfterError(followers);
+                    listNode.AddChild(CreateErrorNode(invalidStart, position));
                     continue;
                 }
 
                 bestError = null;
-                string instructionStart = CurrentKind;
+                int instructionStart = position;
+                int semanticErrorsBefore = semanticErrors.Count;
+                int logDepth = semanticPileLog.Count;
+                symbolTable.BeginTransaction();
 
                 try
                 {
                     listNode.AddChild(ParseInstruction());
+                    symbolTable.CommitTransaction();
                 }
                 catch (ParseFailure)
                 {
+                    symbolTable.RollbackTransaction();
+                    if (semanticErrors.Count > semanticErrorsBefore)
+                        semanticErrors.RemoveRange(semanticErrorsBefore, semanticErrors.Count - semanticErrorsBefore);
+                    if (semanticPileLog.Count > logDepth)
+                        semanticPileLog.RemoveRange(logDepth, semanticPileLog.Count - logDepth);
                     AddBestError();
-                    // Nodo de error para que el árbol refleje la recuperación.
-                    var errorNode = new SyntaxNode("ERROR", null) { Line = Current.Line, Column = Current.Column };
-                    errorNode.AddLeaf(CurrentKind, Current);
-                    listNode.AddChild(errorNode);
                     RecoverAfterInstructionError(followers, instructionStart);
+                    listNode.AddChild(CreateErrorNode(instructionStart, position));
+                }
+                catch
+                {
+                    symbolTable.RollbackTransaction();
+                    throw;
                 }
             }
 
@@ -209,6 +260,15 @@ public sealed class TopDownParser
                 listNode.AddChild(new SyntaxNode("ε", null) { Line = Current.Line, Column = Current.Column });
             return listNode;
         });
+    }
+
+    private SyntaxNode CreateErrorNode(int start, int end)
+    {
+        Token token = tokens[start];
+        var node = new SyntaxNode("ERROR") { Line = token.Line, Column = token.Column };
+        for (int i = start; i < end; i++)
+            node.AddLeaf(tokens[i].Kind, tokens[i]);
+        return node;
     }
 
     // IN -> ASSIGN | WRITE | READ | IF | WHILE | FOR | DO | RAND |
@@ -241,7 +301,7 @@ public sealed class TopDownParser
                     {
                         Token breakToken = Current;
                         if (loopDepth == 0)
-                            AddSemanticError(Current, "'break' solo puede utilizarse dentro de un ciclo.");
+                            AddSemanticError(Current, "'break' solo puede utilizarse dentro de un ciclo.", "SEM_BREAK_OUTSIDE_LOOP");
 
                         Expect(TokenKinds.Break);
                         var node = new SyntaxNode("BREAK", null) { Line = breakToken.Line, Column = breakToken.Column };
@@ -276,8 +336,11 @@ public sealed class TopDownParser
                 Expect(TokenKinds.Identifier);
                 Token assignToken = Current;
                 Expect(TokenKinds.Assignment);
+                int syntaxErrorsBefore = errors.Count;
                 (SemanticValue value, SyntaxNode expNode) = ParseExpressionWithTree();
-                CommitAssignment(value);
+                CheckInstructionEnd();
+                if (errors.Count == syntaxErrorsBefore)
+                    CommitAssignment(value);
 
                 var node = new SyntaxNode("ASSIGN", null) { Line = idToken.Line, Column = idToken.Column };
                 node.AddLeaf(TokenKinds.Identifier, idToken);
@@ -301,6 +364,7 @@ public sealed class TopDownParser
             Token writeToken = Current;
             Expect(TokenKinds.Write);
             (_, SyntaxNode expNode) = ParseExpressionWithTree();
+            CheckInstructionEnd();
             var node = new SyntaxNode("WRITE", null) { Line = writeToken.Line, Column = writeToken.Column };
             node.AddLeaf(TokenKinds.Write, writeToken);
             node.AddChild(expNode);
@@ -317,6 +381,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.Read);
             Token idToken = Current;
             Expect(TokenKinds.Identifier);
+            CheckInstructionEnd();
             // read actualiza la variable visible o la declara, y borra su valor conocido.
             symbolTable.Assign(idToken.Lexeme, null, null);
             var node = new SyntaxNode("READ", null) { Line = readToken.Line, Column = readToken.Column };
@@ -329,14 +394,14 @@ public sealed class TopDownParser
     // IF -> PR12 EXP PR17 INS IF_T
     private SyntaxNode ParseIf()
     {
-        return InContext("if instruction", () =>
+        return InContext("if instruction", () => InBlock(Current, [TokenKinds.Else, TokenKinds.EndIf], () =>
         {
             Token ifToken = Current;
             Expect(TokenKinds.If);
+            Token conditionToken = Current;
             (SemanticValue condValue, SyntaxNode condNode) = ParseExpressionWithTree();
-            RequireBoolean(condValue, condNode.Token ?? ifToken, "if");
-            Token thenToken = Current;
-            Expect(TokenKinds.Then);
+            RequireBoolean(condValue, conditionToken, "if");
+            Token thenToken = ReadSeparator(TokenKinds.Then, ifToken);
             string scope = $"if@{ifToken.Line}:{ifToken.Column}";
             EnterScope(scope);
             SyntaxNode thenBranch;
@@ -348,7 +413,7 @@ public sealed class TopDownParser
             {
                 ExitScope();
             }
-            SyntaxNode tailNode = ParseIfTail();
+            SyntaxNode tailNode = ParseIfTail(ifToken);
 
             var node = new SyntaxNode("IF", null) { Line = ifToken.Line, Column = ifToken.Column };
             node.AddLeaf(TokenKinds.If, ifToken);
@@ -357,28 +422,25 @@ public sealed class TopDownParser
             node.AddChild(thenBranch);
             node.AddChild(tailNode);
             return node;
-        });
+        }));
     }
 
     // IF_T -> PR7 | PR4 INS PR7
-    private SyntaxNode ParseIfTail()
+    private SyntaxNode ParseIfTail(Token ifToken)
     {
         return InContext("if tail", () =>
         {
             var node = new SyntaxNode("IF_T", null) { Line = Current.Line, Column = Current.Column };
-            if (CurrentKind == TokenKinds.EndIf)
+            if (CurrentKind != TokenKinds.Else)
             {
-                Token endIfToken = Current;
-                Match(TokenKinds.EndIf);
+                Token endIfToken = ReadClosing(TokenKinds.EndIf, ifToken);
                 node.AddLeaf(TokenKinds.EndIf, endIfToken);
                 return node;
             }
 
-            if (CurrentKind != TokenKinds.Else)
-                FailExpectedAny([TokenKinds.EndIf, TokenKinds.Else]);
-
             Token elseToken = Current;
             Match(TokenKinds.Else);
+            blocks[^1].Boundaries.Remove(TokenKinds.Else);
             node.AddLeaf(TokenKinds.Else, elseToken);
             EnterScope($"else@{elseToken.Line}:{elseToken.Column}");
             try
@@ -389,8 +451,7 @@ public sealed class TopDownParser
             {
                 ExitScope();
             }
-            Token tailEndToken = Current;
-            Expect(TokenKinds.EndIf);
+            Token tailEndToken = ReadClosing(TokenKinds.EndIf, ifToken);
             node.AddLeaf(TokenKinds.EndIf, tailEndToken);
             return node;
         });
@@ -399,14 +460,14 @@ public sealed class TopDownParser
     // WHILE -> PR20 EXP PR3 INS PR8
     private SyntaxNode ParseWhile()
     {
-        return InContext("while instruction", () =>
+        return InContext("while instruction", () => InBlock(Current, [TokenKinds.EndWhile], () =>
         {
             Token whileToken = Current;
             Expect(TokenKinds.While);
+            Token conditionToken = Current;
             (SemanticValue condValue, SyntaxNode condNode) = ParseExpressionWithTree();
-            RequireBoolean(condValue, condNode.Token ?? whileToken, "while");
-            Token doToken = Current;
-            Expect(TokenKinds.Do);
+            RequireBoolean(condValue, conditionToken, "while");
+            Token doToken = ReadSeparator(TokenKinds.Do, whileToken);
             EnterScope($"while@{whileToken.Line}:{whileToken.Column}");
             SyntaxNode body;
             loopDepth++;
@@ -420,8 +481,7 @@ public sealed class TopDownParser
                 ExitScope();
             }
 
-            Token endToken = Current;
-            Expect(TokenKinds.EndWhile);
+            Token endToken = ReadClosing(TokenKinds.EndWhile, whileToken);
 
             var node = new SyntaxNode("WHILE", null) { Line = whileToken.Line, Column = whileToken.Column };
             node.AddLeaf(TokenKinds.While, whileToken);
@@ -430,13 +490,13 @@ public sealed class TopDownParser
             node.AddChild(body);
             node.AddLeaf(TokenKinds.EndWhile, endToken);
             return node;
-        });
+        }));
     }
 
     // FOR -> PR10 ID PR11 EXP PR18 EXP PR3 INS PR6
     private SyntaxNode ParseFor()
     {
-        return InContext("for instruction", () =>
+        return InContext("for instruction", () => InBlock(Current, [TokenKinds.EndFor], () =>
         {
             Token forToken = Current;
             Expect(TokenKinds.For);
@@ -445,20 +505,19 @@ public sealed class TopDownParser
             {
                 Token idToken = Current;
                 Expect(TokenKinds.Identifier);
-                // La variable de control pertenece al ámbito del for.
-                symbolTable.Declare(idToken.Lexeme);
                 Token fromToken = Current;
                 Expect(TokenKinds.From);
                 Token fromExprToken = Current;
                 (SemanticValue fromValue, SyntaxNode fromNode) = ParseExpressionWithTree();
-                RequireNumeric(fromValue, fromExprToken, "for");
+                RequireNumeric(fromValue, fromExprToken, "El límite inicial de 'for'");
                 Token toToken = Current;
                 Expect(TokenKinds.To);
                 Token toExprToken = Current;
                 (SemanticValue toValue, SyntaxNode toNode) = ParseExpressionWithTree();
-                RequireNumeric(toValue, toExprToken, "for");
-                Token doToken = Current;
-                Expect(TokenKinds.Do);
+                RequireNumeric(toValue, toExprToken, "El límite final de 'for'");
+                Token doToken = ReadSeparator(TokenKinds.Do, forToken);
+                // El nombre de control se introduce solo una vez reconocida la cabecera.
+                symbolTable.Declare(idToken.Lexeme);
                 SyntaxNode body;
                 loopDepth++;
                 try
@@ -470,8 +529,7 @@ public sealed class TopDownParser
                     loopDepth--;
                 }
 
-                Token endToken = Current;
-                Expect(TokenKinds.EndFor);
+                Token endToken = ReadClosing(TokenKinds.EndFor, forToken);
 
                 var node = new SyntaxNode("FOR", null) { Line = forToken.Line, Column = forToken.Column };
                 node.AddLeaf(TokenKinds.For, forToken);
@@ -489,13 +547,13 @@ public sealed class TopDownParser
             {
                 ExitScope();
             }
-        });
+        }));
     }
 
     // DO -> PR3 INS PR5 PR20 EXP
     private SyntaxNode ParseDoWhile()
     {
-        return InContext("do while instruction", () =>
+        return InContext("do while instruction", () => InBlock(Current, [TokenKinds.End], () =>
         {
             Token doToken = Current;
             Expect(TokenKinds.Do);
@@ -505,8 +563,7 @@ public sealed class TopDownParser
             {
                 SyntaxNode body = ParseInstructions([TokenKinds.End, TokenKinds.EndOfFile]);
 
-                Token endToken = Current;
-                Expect(TokenKinds.End);
+                Token endToken = ReadClosing(TokenKinds.End, doToken);
                 Token whileToken = Current;
                 Expect(TokenKinds.While);
                 Token condToken = Current;
@@ -526,7 +583,7 @@ public sealed class TopDownParser
                 loopDepth--;
                 ExitScope();
             }
-        });
+        }));
     }
 
     // RAND -> PR14 ID CE7 EXP
@@ -538,12 +595,15 @@ public sealed class TopDownParser
             Expect(TokenKinds.Rand);
             Token idToken = Current;
             Expect(TokenKinds.Identifier);
-            symbolTable.Assign(idToken.Lexeme, null, null);
             Token commaToken = Current;
             Expect(TokenKinds.Comma);
             Token argumentToken = Current;
+            int syntaxErrorsBefore = errors.Count;
             (SemanticValue argValue, SyntaxNode argNode) = ParseExpressionWithTree();
-            RequireNumeric(argValue, argumentToken, "rand");
+            CheckInstructionEnd();
+            bool validArgument = RequireNumeric(argValue, argumentToken, "El argumento de 'rand'");
+            if (validArgument && errors.Count == syntaxErrorsBefore)
+                symbolTable.Assign(idToken.Lexeme, null, null);
 
             var node = new SyntaxNode("RAND", null) { Line = randToken.Line, Column = randToken.Column };
             node.AddLeaf(TokenKinds.Rand, randToken);
@@ -563,12 +623,13 @@ public sealed class TopDownParser
             Expect(TokenKinds.Move);
             Token firstArgumentToken = Current;
             (SemanticValue firstValue, SyntaxNode firstNode) = ParseExpressionWithTree();
-            RequireNumeric(firstValue, firstArgumentToken, "move");
+            RequireNumeric(firstValue, firstArgumentToken, "El primer argumento de 'move'");
             Token commaToken = Current;
             Expect(TokenKinds.Comma);
             Token secondArgumentToken = Current;
             (SemanticValue secondValue, SyntaxNode secondNode) = ParseExpressionWithTree();
-            RequireNumeric(secondValue, secondArgumentToken, "move");
+            CheckInstructionEnd();
+            RequireNumeric(secondValue, secondArgumentToken, "El segundo argumento de 'move'");
 
             var node = new SyntaxNode("MOVE", null) { Line = moveToken.Line, Column = moveToken.Column };
             node.AddLeaf(TokenKinds.Move, moveToken);
@@ -582,10 +643,14 @@ public sealed class TopDownParser
     // EXP -> EXP_OR (construye árbol + mantiene la pila semántica intacta)
     private (SemanticValue Value, SyntaxNode Node) ParseExpressionWithTree()
     {
+        expressionDepth++;
         int stackDepth = semanticStack.Count;
         int pileDepth = semanticPile.Count;
         int logDepth = semanticPileLog.Count;
         int stepsDepth = semanticPile.Steps.Count;
+        int snapshotsDepth = semanticPile.Snapshots.Count;
+        int semanticErrorsBefore = semanticErrors.Count;
+        int syntaxErrorsBefore = errors.Count;
         try
         {
             (SemanticValue result, SyntaxNode orNode) = InContext("expression", ParseOrExpressionWithTree);
@@ -596,22 +661,38 @@ public sealed class TopDownParser
                 semanticStack.Restore(stackDepth);
             }
 
-            // Vacía la pila didáctica y vuelca las reducciones al log global.
-            for (int i = stepsDepth; i < semanticPile.Steps.Count; i++)
-                semanticPileLog.Add($"L{orNode.Line}: {semanticPile.Steps[i]}");
+            if (errors.Count != syntaxErrorsBefore)
+                result = SemanticValue.Invalid;
+
+            // Las expresiones entre paréntesis contribuyen a la traza de su
+            // expresión externa, pero no la publican dos veces.
+            if (expressionDepth == 1)
+            {
+                if (!result.IsInvalid)
+                    for (int i = stepsDepth; i < semanticPile.Steps.Count; i++)
+                        semanticPileLog.Add($"L{orNode.Line}: {semanticPile.Steps[i]}");
+                semanticPile.RestoreTrace(stepsDepth, snapshotsDepth);
+            }
             semanticPile.Restore(pileDepth);
 
             var expNode = new SyntaxNode("EXP", null) { Line = orNode.Line, Column = orNode.Column, Semantic = result };
             expNode.AddChild(orNode);
             return (result, expNode);
         }
-        catch
+        catch (ParseFailure)
         {
             semanticStack.Restore(stackDepth);
             semanticPile.Restore(pileDepth);
             while (semanticPileLog.Count > logDepth)
                 semanticPileLog.RemoveAt(semanticPileLog.Count - 1);
+            semanticPile.RestoreTrace(stepsDepth, snapshotsDepth);
+            if (semanticErrors.Count > semanticErrorsBefore)
+                semanticErrors.RemoveRange(semanticErrorsBefore, semanticErrors.Count - semanticErrorsBefore);
             throw;
+        }
+        finally
+        {
+            expressionDepth--;
         }
     }
 
@@ -632,7 +713,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.Or);
             MarkAssignmentExpressionAsComplex();
             (_, SyntaxNode rightNode) = ParseAndExpressionWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador lógico requiere operandos booleanos.");
+            ReduceBinaryTraced(operatorToken);
             node.AddLeaf(TokenKinds.Or, operatorToken);
             node.AddChild(rightNode);
         }
@@ -655,7 +736,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.And);
             MarkAssignmentExpressionAsComplex();
             (_, SyntaxNode rightNode) = ParseRelationalExpressionWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador lógico requiere operandos booleanos.");
+            ReduceBinaryTraced(operatorToken);
             node.AddLeaf(TokenKinds.And, operatorToken);
             node.AddChild(rightNode);
         }
@@ -679,9 +760,12 @@ public sealed class TopDownParser
             MarkAssignmentExpressionAsComplex();
             ExpectAny(RelationalOperators, "relational operator");
             (_, SyntaxNode rightNode) = ParseNotExpressionWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador relacional no admite esos tipos de operandos.");
+            ReduceBinaryTraced(operatorToken);
             tail.AddLeaf(operatorToken.Kind, operatorToken);
             tail.AddChild(rightNode);
+            if (RelationalOperators.Contains(CurrentKind))
+                FailDiagnostic(Current, "No se permiten comparaciones encadenadas; combine las comparaciones con '&&' o '||'.",
+                    "SYN_CHAINED_COMPARISON");
         }
         else
         {
@@ -702,7 +786,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.Not);
             MarkAssignmentExpressionAsComplex();
             (_, SyntaxNode childNode) = ParseNotExpressionWithTree();
-            ReduceUnaryTraced(TokenKinds.Not, "El operador '!' requiere un operando booleano.", operatorToken);
+            ReduceUnaryTraced(operatorToken);
             var node = new SyntaxNode("EXP_NOT", null)
             {
                 Line = operatorToken.Line,
@@ -738,7 +822,7 @@ public sealed class TopDownParser
             MarkAssignmentExpressionAsComplex();
             ExpectAny(AdditiveOperators, "additive operator");
             (_, SyntaxNode rightNode) = ParseTermWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador aritmético requiere operandos numéricos.");
+            ReduceBinaryTraced(operatorToken);
             tail.AddLeaf(operatorToken.Kind, operatorToken);
             tail.AddChild(rightNode);
         }
@@ -769,7 +853,7 @@ public sealed class TopDownParser
             MarkAssignmentExpressionAsComplex();
             ExpectAny(MultiplicativeOperators, "multiplicative operator");
             (_, SyntaxNode rightNode) = ParseUnaryWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador aritmético requiere operandos numéricos.");
+            ReduceBinaryTraced(operatorToken);
             tail.AddLeaf(operatorToken.Kind, operatorToken);
             tail.AddChild(rightNode);
         }
@@ -789,7 +873,7 @@ public sealed class TopDownParser
             Token operatorToken = Current;
             Expect(TokenKinds.Plus);
             (_, SyntaxNode childNode) = ParseUnaryWithTree();
-            ReduceUnaryTraced(TokenKinds.Plus, "El signo unario requiere un operando numérico.", operatorToken);
+            ReduceUnaryTraced(operatorToken);
             var node = new SyntaxNode("UNARIO", null)
             {
                 Line = operatorToken.Line,
@@ -806,7 +890,7 @@ public sealed class TopDownParser
             Token operatorToken = Current;
             Expect(TokenKinds.Minus);
             (_, SyntaxNode childNode) = ParseUnaryWithTree();
-            ReduceUnaryTraced(TokenKinds.Minus, "El signo unario requiere un operando numérico.", operatorToken);
+            ReduceUnaryTraced(operatorToken);
             var node = new SyntaxNode("UNARIO", null)
             {
                 Line = operatorToken.Line,
@@ -839,7 +923,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.Power);
             MarkAssignmentExpressionAsComplex();
             (_, SyntaxNode exponentNode) = ParseUnaryWithTree();
-            ReduceBinaryTraced(operatorToken, "El operador '^' requiere operandos numéricos.");
+            ReduceBinaryTraced(operatorToken);
             tail.AddLeaf(TokenKinds.Power, operatorToken);
             tail.AddChild(exponentNode);
         }
@@ -859,6 +943,10 @@ public sealed class TopDownParser
         return InContext("factor", () =>
         {
             Token factorToken = Current;
+            // ID seguido de '=' inicia otra asignación, no es el operando
+            // de la expresión incompleta anterior, incluso en la misma línea.
+            if (CurrentKind == TokenKinds.Identifier && PeekKind(1) == TokenKinds.Assignment)
+                FailMissingExpression();
             var node = new SyntaxNode("FACTOR", null) { Line = factorToken.Line, Column = factorToken.Column };
 
             switch (CurrentKind)
@@ -914,16 +1002,15 @@ public sealed class TopDownParser
                     Token leftToken = Current;
                     Expect(TokenKinds.LeftParen);
                     (SemanticValue parenthesized, SyntaxNode innerNode) = ParseExpressionWithTree();
-                    Token rightToken = Current;
-                    Expect(TokenKinds.RightParen);
-                    semanticStack.Push(parenthesized);
+                    Token rightToken = ReadRightParenthesis(leftToken);
+                    semanticStack.Push(rightToken.IsSynthetic ? SemanticValue.Invalid : parenthesized);
                     semanticPile.PushOperand($"({ShortLabel(innerNode)})");
                     node.AddLeaf(TokenKinds.LeftParen, leftToken);
                     node.AddChild(innerNode);
                     node.AddLeaf(TokenKinds.RightParen, rightToken);
                     break;
                 default:
-                    FailExpected("factor");
+                    FailMissingExpression();
                     break;
             }
             return node;
@@ -975,10 +1062,10 @@ public sealed class TopDownParser
         return new SemanticValue(assignment.DataType, assignment.Value, false);
     }
 
-    private void ReduceUnaryTraced(string operatorKind, string message, Token operatorToken)
+    private void ReduceUnaryTraced(Token operatorToken)
     {
         string operandLabel = semanticPile.Count > 0 ? semanticPile.Entries[^1] : "?";
-        ReduceUnary(operatorKind, message, operatorToken);
+        ReduceUnary(operatorToken);
         string resultType = semanticStack.Count > 0 ? semanticStack.Peek().DataType ?? "?" : "?";
         if (resultType == SemanticTypes.Invalid)
             semanticPile.Restore(Math.Max(0, semanticPile.Count - 1));
@@ -986,11 +1073,11 @@ public sealed class TopDownParser
             semanticPile.ReduceUnary(operatorToken.Lexeme, operandLabel, resultType);
     }
 
-    private void ReduceBinaryTraced(Token operatorToken, string message)
+    private void ReduceBinaryTraced(Token operatorToken)
     {
         string left = semanticPile.Count >= 2 ? semanticPile.Entries[^2] : "?";
         string right = semanticPile.Count >= 1 ? semanticPile.Entries[^1] : "?";
-        ReduceBinary(operatorToken, message);
+        ReduceBinary(operatorToken);
         string resultType = semanticStack.Count > 0 ? semanticStack.Peek().DataType ?? "?" : "?";
         if (resultType == SemanticTypes.Invalid)
             semanticPile.Restore(Math.Max(0, semanticPile.Count - 2));
@@ -998,8 +1085,9 @@ public sealed class TopDownParser
             semanticPile.ReduceBinary(operatorToken.Lexeme, left, right, resultType);
     }
 
-    private void ReduceUnary(string operatorKind, string message, Token operatorToken)
+    private void ReduceUnary(Token operatorToken)
     {
+        string operatorKind = operatorToken.Kind;
         SemanticValue operand = semanticStack.Pop();
 
         if (operand.IsInvalid)
@@ -1012,7 +1100,8 @@ public sealed class TopDownParser
         {
             if (!CanBeBoolean(operand))
             {
-                AddSemanticError(operatorToken, message);
+                AddSemanticError(operatorToken,
+                    $"El operador unario '{operatorToken.Lexeme}' requiere un operando booleano; recibió {TypeName(operand)}.");
                 semanticStack.Push(SemanticValue.Invalid);
                 return;
             }
@@ -1023,7 +1112,8 @@ public sealed class TopDownParser
 
         if (!CanBeNumeric(operand))
         {
-            AddSemanticError(operatorToken, message);
+            AddSemanticError(operatorToken,
+                $"El operador unario '{operatorToken.Lexeme}' requiere un operando numérico; recibió {TypeName(operand)}.");
             semanticStack.Push(SemanticValue.Invalid);
             return;
         }
@@ -1035,7 +1125,7 @@ public sealed class TopDownParser
         semanticStack.Push(new SemanticValue(operand.DataType, value, operand.IsConstant && value is not null));
     }
 
-    private void ReduceBinary(Token operatorToken, string message)
+    private void ReduceBinary(Token operatorToken)
     {
         SemanticValue right = semanticStack.Pop();
         SemanticValue left = semanticStack.Pop();
@@ -1052,7 +1142,8 @@ public sealed class TopDownParser
         {
             if (!CanBeBoolean(left) || !CanBeBoolean(right))
             {
-                AddSemanticError(operatorToken, message);
+                AddSemanticError(operatorToken,
+                    $"El operador '{operatorToken.Lexeme}' requiere operandos booleanos; recibió {TypeName(left)} y {TypeName(right)}.");
                 semanticStack.Push(SemanticValue.Invalid);
                 return;
             }
@@ -1066,7 +1157,8 @@ public sealed class TopDownParser
         {
             if (!CanBeNumeric(left) || !CanBeNumeric(right))
             {
-                AddSemanticError(operatorToken, message);
+                AddSemanticError(operatorToken,
+                    $"El operador '{operatorToken.Lexeme}' requiere operandos numéricos; recibió {TypeName(left)} y {TypeName(right)}.");
                 semanticStack.Push(SemanticValue.Invalid);
                 return;
             }
@@ -1080,7 +1172,8 @@ public sealed class TopDownParser
 
         if (!CanBeCompared(left, right, operatorKind))
         {
-            AddSemanticError(operatorToken, message);
+            AddSemanticError(operatorToken,
+                $"El operador '{operatorToken.Lexeme}' no admite operandos {TypeName(left)} y {TypeName(right)}.");
             semanticStack.Push(SemanticValue.Invalid);
             return;
         }
@@ -1091,16 +1184,23 @@ public sealed class TopDownParser
     private void RequireBoolean(SemanticValue value, Token token, string construct)
     {
         if (!value.IsInvalid && !CanBeBoolean(value))
-            AddSemanticError(token, $"La condición de '{construct}' debe ser booleana.");
+            AddSemanticError(token, $"La condición de '{construct}' debe ser booleana; se recibió {TypeName(value)}.",
+                "SEM_CONDITION_TYPE");
     }
 
-    private void RequireNumeric(SemanticValue value, Token token, string construct)
+    private bool RequireNumeric(SemanticValue value, Token token, string description)
     {
-        if (!value.IsInvalid && !CanBeNumeric(value))
-            AddSemanticError(token, $"El argumento de '{construct}' debe ser numérico.");
+        if (value.IsInvalid)
+            return false;
+        if (CanBeNumeric(value))
+            return true;
+        AddSemanticError(token, $"{description} debe ser numérico; se recibió {TypeName(value)}.", "SEM_ARGUMENT_TYPE");
+        return false;
     }
 
-    private void AddSemanticError(Token token, string message)
+    private static string TypeName(SemanticValue value) => value.DataType ?? "tipo desconocido";
+
+    private void AddSemanticError(Token token, string message, string code = "SEM_TYPE_MISMATCH")
     {
         if (semanticErrors.Any(error =>
                 error.Token.Line == token.Line &&
@@ -1108,7 +1208,7 @@ public sealed class TopDownParser
                 error.Message == message))
             return;
 
-        semanticErrors.Add(new SemanticError(token, message));
+        semanticErrors.Add(new SemanticError(token, message, code));
     }
 
     private static bool CanBeNumeric(SemanticValue value) => value.IsUnknown || value.IsNumeric;
@@ -1190,14 +1290,6 @@ public sealed class TopDownParser
         throw new ParseFailure();
     }
 
-    private void FailExpectedAny(IEnumerable<string> expectedKinds, string? contextOverride = null)
-    {
-        foreach (string expected in expectedKinds)
-            RecordError(expected, contextOverride);
-
-        throw new ParseFailure();
-    }
-
     private void RecordError(string expected, string? contextOverride = null)
     {
         string context = contextOverride ?? CurrentContext;
@@ -1219,51 +1311,187 @@ public sealed class TopDownParser
         bestError = null;
     }
 
-    private void RecoverAfterError(HashSet<string> followers, bool stopAtInstructionStart = true)
+    private string PeekKind(int offset) => tokens[Math.Min(position + offset, tokens.Count - 1)].Kind;
+
+    private bool IsInstructionBoundary() => InstructionStarts.Contains(CurrentKind) &&
+        (CurrentKind != TokenKinds.Identifier || PeekKind(1) == TokenKinds.Assignment);
+
+    private bool IsOuterBoundary(string kind) => blocks.Take(Math.Max(0, blocks.Count - 1))
+        .Any(block => block.Boundaries.Contains(kind));
+
+    private void CheckInstructionEnd()
     {
-        if (CurrentKind == TokenKinds.EndOfFile || followers.Contains(CurrentKind))
-            return;
+        if (!InstructionStarts.Contains(CurrentKind) && !BlockTerminators.Contains(CurrentKind))
+            FailDiagnostic(Current, $"El token {Diagnostic.DescribeToken(Current)} no puede continuar esta instrucción; se esperaba un operador válido o el inicio de otra instrucción.",
+                "SYN_UNEXPECTED_TOKEN");
+    }
 
-        int errorLine = Current.Line;
-        position++;
+    private static string Keyword(string kind) => kind switch
+    {
+        TokenKinds.Start => "start",
+        TokenKinds.If => "if",
+        TokenKinds.While => "while",
+        TokenKinds.For => "for",
+        TokenKinds.Then => "then",
+        TokenKinds.Do => "do",
+        TokenKinds.End => "end",
+        TokenKinds.EndIf => "endif",
+        TokenKinds.EndWhile => "endwhile",
+        TokenKinds.EndFor => "endfor",
+        _ => kind
+    };
 
+    private Token MissingToken(string kind) => new(kind, "", Current.Line, Current.Column) { IsSynthetic = true };
+
+    private Token ReadSeparator(string kind, Token opening)
+    {
+        Token token = Current;
+        if (Match(kind))
+            return token;
+        if (!IsInstructionBoundary() && !BlockTerminators.Contains(CurrentKind))
+        {
+            FailExpected(kind);
+            throw new ParseFailure();
+        }
+
+        AddDiagnostic(Current, $"Falta '{Keyword(kind)}' antes de {Diagnostic.DescribeToken(Current)}.",
+            "SYN_MISSING_TOKEN", kind == TokenKinds.Start ? null : opening);
+        return MissingToken(kind);
+    }
+
+    private Token ReadClosing(string kind, Token opening)
+    {
+        Token token = Current;
+        if (Match(kind))
+            return token;
+
+        string origin = $"'{Keyword(opening.Kind)}' iniciado en {opening.Line}:{opening.Column}";
+        bool missing = CurrentKind == TokenKinds.EndOfFile || IsOuterBoundary(CurrentKind);
+        AddDiagnostic(Current, missing
+                ? $"Falta '{Keyword(kind)}' para el {origin}, antes de {Diagnostic.DescribeToken(Current)}."
+                : $"Se esperaba '{Keyword(kind)}' para el {origin}; se encontró {Diagnostic.DescribeToken(Current)}.",
+            missing ? "SYN_MISSING_CLOSER" : "SYN_MISMATCHED_CLOSER", opening);
+        Token recovered = MissingToken(kind);
+        if (!missing && BlockTerminators.Contains(CurrentKind))
+            position++;
+        return recovered;
+    }
+
+    private Token ReadRightParenthesis(Token opening)
+    {
+        Token token = Current;
+        if (Match(TokenKinds.RightParen))
+            return token;
+        if (BlockTerminators.Contains(CurrentKind) || IsInstructionBoundary() ||
+            CurrentKind is TokenKinds.Then or TokenKinds.Do or TokenKinds.To or TokenKinds.Comma)
+        {
+            AddDiagnostic(Current, $"Falta ')' para el paréntesis abierto en {opening.Line}:{opening.Column}, antes de {Diagnostic.DescribeToken(Current)}.",
+                "SYN_MISSING_TOKEN", opening);
+            return MissingToken(TokenKinds.RightParen);
+        }
+        FailExpected(TokenKinds.RightParen);
+        throw new ParseFailure();
+    }
+
+    private void FailMissingExpression()
+    {
+        Token previous = tokens[Math.Max(0, position - 1)];
+        bool operand = AdditiveOperators.Contains(previous.Kind) || MultiplicativeOperators.Contains(previous.Kind) ||
+            RelationalOperators.Contains(previous.Kind) || previous.Kind is TokenKinds.Power or TokenKinds.And or TokenKinds.Or or TokenKinds.Not;
+        string description = operand ? "un operando" : "una expresión";
+        FailDiagnostic(previous, $"Falta {description} después de {Diagnostic.DescribeToken(previous)}; se encontró {Diagnostic.DescribeToken(Current)}.",
+            operand ? "SYN_MISSING_OPERAND" : "SYN_MISSING_EXPRESSION");
+    }
+
+    private void FailDiagnostic(Token token, string message, string code)
+    {
+        bestError = new ParseError(token, CurrentContext, message, code);
+        throw new ParseFailure();
+    }
+
+    private void AddDiagnostic(Token token, string message, string code, Token? related = null)
+    {
+        errors.Add(new ParseError(token, CurrentContext, message, code, related));
+    }
+
+    private void RecoverAfterError(HashSet<string> followers)
+    {
         while (CurrentKind != TokenKinds.EndOfFile)
         {
-            if (followers.Contains(CurrentKind))
+            if (followers.Contains(CurrentKind) || IsOuterBoundary(CurrentKind) || IsInstructionBoundary())
                 return;
-
-            if (stopAtInstructionStart && Current.Line != errorLine && InstructionStarts.Contains(CurrentKind))
-                return;
-
             if (BlockTerminators.Contains(CurrentKind))
-            {
-                position++;
                 return;
-            }
-
             position++;
         }
     }
 
-    private void RecoverAfterInstructionError(HashSet<string> followers, string instructionStart)
+    private void RecoverAfterInstructionError(HashSet<string> followers, int instructionStart)
     {
-        HashSet<string> instructionTerminators = GetInstructionTerminators(instructionStart);
-        HashSet<string> syncTokens = [.. followers, .. instructionTerminators];
+        if (ClosingKind(tokens[instructionStart].Kind) is null)
+        {
+            if (position == instructionStart)
+                position++;
+            RecoverAfterError(followers);
+            return;
+        }
 
-        RecoverAfterError(syncTokens, instructionTerminators.Count == 0);
-
-        if (instructionTerminators.Contains(CurrentKind) && !followers.Contains(CurrentKind))
+        // Se vuelve a recorrer solo la instrucción rechazada para equilibrar
+        // sus bloques. El primer cierre de un bloque interno no cierra al externo.
+        var pending = new List<(string Closer, bool AwaitingDo)>();
+        position = instructionStart;
+        while (CurrentKind != TokenKinds.EndOfFile)
+        {
+            string kind = CurrentKind;
+            if (kind == TokenKinds.Do && pending.Count > 0 && pending[^1].AwaitingDo)
+            {
+                pending[^1] = (pending[^1].Closer, false);
+                position++;
+                continue;
+            }
+            string? closer = ClosingKind(kind);
+            if (closer is not null)
+            {
+                pending.Add((closer, kind is TokenKinds.While or TokenKinds.For));
+                position++;
+                continue;
+            }
+            if (BlockTerminators.Contains(kind))
+            {
+                int match = pending.FindLastIndex(block => block.Closer == kind);
+                if (match >= 0)
+                {
+                    pending.RemoveRange(match, pending.Count - match);
+                    position++;
+                    // 'end while EXP' es el cierre del do, no otro while.
+                    if (kind == TokenKinds.End)
+                    {
+                        if (CurrentKind == TokenKinds.While)
+                            position++;
+                        while (CurrentKind != TokenKinds.EndOfFile && !BlockTerminators.Contains(CurrentKind) && !IsInstructionBoundary())
+                            position++;
+                    }
+                    if (pending.Count == 0)
+                        return;
+                    continue;
+                }
+                if ((followers.Contains(kind) || blocks.Any(block => block.Boundaries.Contains(kind))) &&
+                    (kind != TokenKinds.Else || !pending.Any(block => block.Closer == TokenKinds.EndIf)))
+                    return;
+            }
             position++;
+        }
     }
 
-    private static HashSet<string> GetInstructionTerminators(string instructionStart) => instructionStart switch
+    private static string? ClosingKind(string instructionStart) => instructionStart switch
     {
-        TokenKinds.If => [TokenKinds.Else, TokenKinds.EndIf],
-        TokenKinds.While => [TokenKinds.EndWhile],
-        TokenKinds.For => [TokenKinds.EndFor],
-        TokenKinds.Do => [TokenKinds.End],
-        _ => []
+        TokenKinds.If => TokenKinds.EndIf,
+        TokenKinds.While => TokenKinds.EndWhile,
+        TokenKinds.For => TokenKinds.EndFor,
+        TokenKinds.Do => TokenKinds.End,
+        _ => null
     };
 
-    private static Token CreateSyntheticToken(string kind, int line, int column) => new(kind, "", line, column);
+    private static Token CreateSyntheticToken(string kind, int line, int column) =>
+        new(kind, "", line, column) { IsSynthetic = true };
 }

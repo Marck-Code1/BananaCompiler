@@ -222,7 +222,8 @@ La gramática solo determina si una expresión está bien formada. Restricciones
 usar booleanos con `&&`, números con `+` o `break` únicamente dentro de un ciclo
 pertenecen al análisis semántico. El parser ejecuta esas acciones durante el
 reconocimiento mediante una pila semántica. Cada reducción produce un valor de
-expresión tipado; las instrucciones no se conservan en un AST completo.
+expresión tipado; las instrucciones se conservan en `ParseResult.SyntaxTree`,
+incluyendo nodos `ERROR` y `MISSING` cuando hubo recuperación.
 
 ## Pila semántica
 
@@ -239,6 +240,10 @@ semánticos en `ParseResult.SemanticErrors`. Entre las restricciones validadas
 están los operandos booleanos de `&&`, `||` y `!`, los operandos numéricos de
 las operaciones aritméticas, las condiciones booleanas y el uso de `break`
 dentro de ciclos.
+
+Los diagnósticos y la recuperación de instrucciones y bloques se describen en
+[Diagnostics.md](Diagnostics.md). La recuperación no convierte un programa
+con errores en uno válido ni hace que los saltos de línea terminen instrucciones.
 
 ```text
 ID -> identificador

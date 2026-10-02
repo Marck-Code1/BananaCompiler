@@ -44,7 +44,7 @@ public sealed class SyntaxNode
 
     public SyntaxNode AddLeaf(string kind, Models.Token token)
     {
-        Children.Add(new SyntaxNode(kind, token));
+        Children.Add(new SyntaxNode(token.IsSynthetic ? "MISSING" : kind, token));
         return this;
     }
 

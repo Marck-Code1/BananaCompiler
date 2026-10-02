@@ -34,10 +34,32 @@ public sealed class LexicalAnalyzer
         return context.Tokens;
     }
 
-    public List<Token> Tokenize(string source)
+    public List<Token> Tokenize(string source) => Tokenize(source, includeEndOfFile: false);
+
+    /// <summary>La opción EOF incluye la posición exacta del final del texto para los diagnósticos.</summary>
+    public List<Token> Tokenize(string source, bool includeEndOfFile)
     {
         using StringReader reader = new(source);
-        return Tokenize(reader);
+        List<Token> tokens = Tokenize(reader);
+        if (includeEndOfFile)
+        {
+            int line = 1;
+            int column = 1;
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (source[i] is '\r' or '\n')
+                {
+                    if (source[i] == '\r' && i + 1 < source.Length && source[i + 1] == '\n')
+                        i++;
+                    line++;
+                    column = 1;
+                }
+                else
+                    column++;
+            }
+            tokens.Add(new Token(TokenKinds.EndOfFile, "", line, column));
+        }
+        return tokens;
     }
 
     // Recorrido por líneas
