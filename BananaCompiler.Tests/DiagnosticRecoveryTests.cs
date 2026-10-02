@@ -255,6 +255,19 @@ public sealed class DiagnosticRecoveryTests
         Assert.All(result.Diagnostics, diagnostic => Assert.False(string.IsNullOrWhiteSpace(diagnostic.Code)));
     }
 
+    [Theory]
+    [InlineData("start if true write 1 endif end", "Sintáctico: Falta 'then' antes de 'write'.")]
+    [InlineData("start x = true + 1 end", "Semántico: El operador '+' requiere operandos numéricos; recibió bool y Entero.")]
+    public void UserFacingDiagnosticsUseSpanishMessagesWithoutInternalCodes(string source, string expected)
+    {
+        Diagnostic diagnostic = Assert.Single(Parse(source).Diagnostics);
+
+        Assert.Equal(expected, diagnostic.Format());
+        Assert.DoesNotContain(diagnostic.Code, diagnostic.Format());
+        Assert.DoesNotContain("SYN_", diagnostic.Format());
+        Assert.DoesNotContain("SEM_", diagnostic.Format());
+    }
+
     [Fact]
     public void IncompleteExpressionDiscardsItsPartialSemanticsButNotOtherInstructions()
     {

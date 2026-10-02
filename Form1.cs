@@ -205,9 +205,8 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
 
             foreach (Diagnostic diagnostic in result.Diagnostics)
             {
-                string category = diagnostic.Kind == DiagnosticKind.Syntax ? "Sintáctico" : "Semántico";
                 dgErroresSintacticos.Rows.Add($"{diagnostic.Token.Line}:{diagnostic.Token.Column}",
-                    $"{category} [{diagnostic.Code}]: {diagnostic.Message}");
+                    diagnostic.Format());
             }
 
             treeInfo = result.SyntaxTree is null

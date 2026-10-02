@@ -7,12 +7,15 @@ separado. `ParseResult.Diagnostics` combina ambos grupos y los ordena por
 línea, columna y categoría. Cada diagnóstico incluye:
 
 - `Kind`: sintáctico o semántico.
-- `Code`: identificador estable del problema.
+- `Code`: identificador interno estable del problema, no visible en la interfaz.
 - `Token`: ubicación principal.
 - `Message`: texto para mostrar al usuario.
 - `RelatedToken`: apertura relacionada, cuando falta un delimitador o un cierre.
 
-La interfaz muestra `Línea:Columna`, categoría, código y mensaje. Los errores
+La interfaz muestra `Línea:Columna` y un mensaje en español mediante
+`Diagnostic.Format()`, por ejemplo: `Sintáctico: Falta 'then' antes de 'write'.`
+Los códigos se conservan solo para identificar los diagnósticos en el código y
+en las pruebas; no se muestran al usuario. Los errores
 de condiciones señalan el inicio de la expresión, no la palabra `if` o `while`.
 Los errores de operadores señalan el operador e indican los tipos recibidos.
 Los mensajes de `for` y `move` distinguen límites y argumentos.
