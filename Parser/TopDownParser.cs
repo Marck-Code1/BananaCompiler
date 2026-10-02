@@ -15,7 +15,6 @@ public sealed class TopDownParser
     private readonly SemanticPile semanticPile = new();
     private readonly List<string> semanticPileLog = [];
     private readonly ScopedSymbolTable symbolTable = new();
-    private readonly Dictionary<string, SymbolAssignment> symbolAssignments = [];
     private int position;
     private int loopDepth;
     private ParseError? bestError;
@@ -107,12 +106,10 @@ public sealed class TopDownParser
             AddBestError();
         }
 
-        IReadOnlyDictionary<string, SymbolAssignment> assignments = symbolAssignments.ToDictionary();
-        List<SymbolAssignment> scoped = symbolTable.Entries.ToList();
-        List<string> pileLog = semanticPileLog.ToList();
+        symbolTable.AssignAddresses();
         return errors.Count == 0
-            ? ParseResult.Ok(assignments, semanticErrors, syntaxRoot, scoped, pileLog)
-            : ParseResult.Fail(errors, assignments, semanticErrors, syntaxRoot, scoped, pileLog);
+            ? ParseResult.Ok(semanticErrors, syntaxRoot, symbolTable.Entries, semanticPileLog)
+            : ParseResult.Fail(errors, semanticErrors, syntaxRoot, symbolTable.Entries, semanticPileLog);
     }
 
     private Token Current => tokens[Math.Min(position, tokens.Count - 1)];
@@ -320,8 +317,8 @@ public sealed class TopDownParser
             Expect(TokenKinds.Read);
             Token idToken = Current;
             Expect(TokenKinds.Identifier);
-            // read define la variable en el ámbito actual aunque su tipo siga desconocido.
-            TouchSymbol(idToken.Lexeme, null, null);
+            // read actualiza la variable visible o la declara, y borra su valor conocido.
+            symbolTable.Assign(idToken.Lexeme, null, null);
             var node = new SyntaxNode("READ", null) { Line = readToken.Line, Column = readToken.Column };
             node.AddLeaf(TokenKinds.Read, readToken);
             node.AddLeaf(TokenKinds.Identifier, idToken);
@@ -340,7 +337,7 @@ public sealed class TopDownParser
             RequireBoolean(condValue, condNode.Token ?? ifToken, "if");
             Token thenToken = Current;
             Expect(TokenKinds.Then);
-            string scope = $"if@{ifToken.Line}";
+            string scope = $"if@{ifToken.Line}:{ifToken.Column}";
             EnterScope(scope);
             SyntaxNode thenBranch;
             try
@@ -383,7 +380,7 @@ public sealed class TopDownParser
             Token elseToken = Current;
             Match(TokenKinds.Else);
             node.AddLeaf(TokenKinds.Else, elseToken);
-            EnterScope($"else@{elseToken.Line}");
+            EnterScope($"else@{elseToken.Line}:{elseToken.Column}");
             try
             {
                 node.AddChild(ParseInstructions([TokenKinds.EndIf, TokenKinds.End, TokenKinds.EndOfFile]));
@@ -410,7 +407,7 @@ public sealed class TopDownParser
             RequireBoolean(condValue, condNode.Token ?? whileToken, "while");
             Token doToken = Current;
             Expect(TokenKinds.Do);
-            EnterScope($"while@{whileToken.Line}");
+            EnterScope($"while@{whileToken.Line}:{whileToken.Column}");
             SyntaxNode body;
             loopDepth++;
             try
@@ -443,13 +440,13 @@ public sealed class TopDownParser
         {
             Token forToken = Current;
             Expect(TokenKinds.For);
-            EnterScope($"for@{forToken.Line}");
+            EnterScope($"for@{forToken.Line}:{forToken.Column}");
             try
             {
                 Token idToken = Current;
                 Expect(TokenKinds.Identifier);
                 // La variable de control pertenece al ámbito del for.
-                TouchSymbol(idToken.Lexeme, null, null);
+                symbolTable.Declare(idToken.Lexeme);
                 Token fromToken = Current;
                 Expect(TokenKinds.From);
                 Token fromExprToken = Current;
@@ -502,34 +499,33 @@ public sealed class TopDownParser
         {
             Token doToken = Current;
             Expect(TokenKinds.Do);
-            EnterScope($"do@{doToken.Line}");
-            SyntaxNode body;
+            EnterScope($"do@{doToken.Line}:{doToken.Column}");
             loopDepth++;
             try
             {
-                body = ParseInstructions([TokenKinds.End, TokenKinds.EndOfFile]);
+                SyntaxNode body = ParseInstructions([TokenKinds.End, TokenKinds.EndOfFile]);
+
+                Token endToken = Current;
+                Expect(TokenKinds.End);
+                Token whileToken = Current;
+                Expect(TokenKinds.While);
+                Token condToken = Current;
+                (SemanticValue condValue, SyntaxNode condNode) = ParseExpressionWithTree();
+                RequireBoolean(condValue, condToken, "do while");
+
+                var node = new SyntaxNode("DO", null) { Line = doToken.Line, Column = doToken.Column };
+                node.AddLeaf(TokenKinds.Do, doToken);
+                node.AddChild(body);
+                node.AddLeaf(TokenKinds.End, endToken);
+                node.AddLeaf(TokenKinds.While, whileToken);
+                node.AddChild(condNode);
+                return node;
             }
             finally
             {
                 loopDepth--;
                 ExitScope();
             }
-
-            Token endToken = Current;
-            Expect(TokenKinds.End);
-            Token whileToken = Current;
-            Expect(TokenKinds.While);
-            Token condToken = Current;
-            (SemanticValue condValue, SyntaxNode condNode) = ParseExpressionWithTree();
-            RequireBoolean(condValue, condToken, "do while");
-
-            var node = new SyntaxNode("DO", null) { Line = doToken.Line, Column = doToken.Column };
-            node.AddLeaf(TokenKinds.Do, doToken);
-            node.AddChild(body);
-            node.AddLeaf(TokenKinds.End, endToken);
-            node.AddLeaf(TokenKinds.While, whileToken);
-            node.AddChild(condNode);
-            return node;
         });
     }
 
@@ -542,7 +538,7 @@ public sealed class TopDownParser
             Expect(TokenKinds.Rand);
             Token idToken = Current;
             Expect(TokenKinds.Identifier);
-            TouchSymbol(idToken.Lexeme, null, null);
+            symbolTable.Assign(idToken.Lexeme, null, null);
             Token commaToken = Current;
             Expect(TokenKinds.Comma);
             Token argumentToken = Current;
@@ -960,35 +956,19 @@ public sealed class TopDownParser
 
     private void CommitAssignment(SemanticValue expression)
     {
-        if (assignmentToken is null)
+        if (assignmentToken is null || expression.IsInvalid)
             return;
 
-        string name = assignmentToken.Lexeme;
-        symbolAssignments.TryGetValue(name, out SymbolAssignment? previousAssignment);
-
-        string? dataType = expression.IsInvalid
-            ? previousAssignment?.DataType
-            : expression.DataType ?? previousAssignment?.DataType;
         string? value = assignmentExpressionIsSimple && expression.IsConstant
             ? expression.Value
             : null;
 
-        SymbolAssignment entry = symbolTable.DeclareOrUpdate(name, dataType, value);
-        symbolAssignments[name] = entry;
-    }
-
-    /// <summary>Registra un identificador sin tipo conocido (read/for/rand).</summary>
-    private void TouchSymbol(string name, string? dataType, string? value)
-    {
-        SymbolAssignment entry = symbolTable.DeclareOrUpdate(name, dataType, value);
-        if (!symbolAssignments.ContainsKey(name))
-            symbolAssignments[name] = entry;
+        symbolTable.Assign(assignmentToken.Lexeme, expression.DataType, value);
     }
 
     private SemanticValue GetIdentifierValue(Token token)
     {
-        SymbolAssignment? assignment = symbolTable.Lookup(token.Lexeme) ??
-            (symbolAssignments.TryGetValue(token.Lexeme, out SymbolAssignment? legacy) ? legacy : null);
+        SymbolAssignment? assignment = symbolTable.Lookup(token.Lexeme);
         if (assignment is null || string.IsNullOrWhiteSpace(assignment.DataType))
             return SemanticValue.Unknown;
 

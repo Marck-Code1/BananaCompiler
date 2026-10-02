@@ -54,30 +54,25 @@ namespace BananaCompiler
             txtTokens.AddText(token + value.Id + ' ');
         }
 
-        private void applySymbolAssignments(IReadOnlyDictionary<string, SymbolAssignment> assignments)
-        {
-            foreach (SymbolAssignment assignment in assignments.Values)
-            {
-                if (!Identifiers.TryGetValue(assignment.Name, out Identifier? identifier))
-                    continue;
-
-                identifier.DataType = assignment.DataType;
-                identifier.Value = assignment.Value;
-                identifier.Scope = assignment.Scope;
-                identifier.Address = assignment.Address;
-                identifier.Size = assignment.Size;
-            }
-
-            if (assignments.Count > 0)
-                updateSimbolos();
-        }
-
-        private void updateSimbolos()
+        private void updateSimbolos(IReadOnlyList<SymbolAssignment> symbols)
         {
             dgSimbolos.Rows.Clear();
-            foreach (var (_, id) in Identifiers.OrderBy(pair => pair.Value.Address))
+            var displayedNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SymbolAssignment symbol in symbols.OrderBy(symbol => symbol.Address))
             {
-                dgSimbolos.Rows.Add(id.Id, id.Name, id.DataType, id.Value, id.Scope, id.AddressHex, id.Size);
+                if (!Identifiers.TryGetValue(symbol.Name, out Identifier? identifier))
+                    continue;
+
+                dgSimbolos.Rows.Add(identifier.Id, symbol.Name, symbol.DataType, symbol.Value,
+                    symbol.Scope, symbol.AddressHex, symbol.Size);
+                displayedNames.Add(symbol.Name);
+            }
+
+            // Conserva los identificadores léxicos no declarados o pendientes por errores.
+            foreach (Identifier identifier in Identifiers.Values.OrderBy(identifier => identifier.Id))
+            {
+                if (!displayedNames.Contains(identifier.Name))
+                    dgSimbolos.Rows.Add(identifier.Id, identifier.Name);
             }
         }
 
@@ -190,7 +185,7 @@ namespace BananaCompiler
             }
 
             txtReporte.Text = @$"Líneas de código: {txtTokens.Lines.Count}
-Cantidad Símbolos: {Identifiers.Count}
+Cantidad Símbolos: {countRows(dgSimbolos)}
 Errores Léxicos: {lexicalErrorCount}
 Errores Sintácticos y Semánticos: {syntaxErrorCount}
 {treeInfo}
@@ -203,7 +198,7 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
         {
             var parser = new TopDownParser(lexicalTokens);
             var result = parser.Parse();
-            applySymbolAssignments(result.SymbolAssignments);
+            updateSimbolos(result.ScopedSymbols);
 
             foreach (var error in result.Errors)
                 dgErroresSintacticos.Rows.Add(error.Token.Line, error.Format());
