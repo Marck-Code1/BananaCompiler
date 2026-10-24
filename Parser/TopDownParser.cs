@@ -25,13 +25,10 @@ public sealed class TopDownParser
 
     private sealed record BlockContext(Token Opening, HashSet<string> Boundaries);
 
-    /// <summary>Raíz del árbol de sintaxis construido durante el parseo (S).</summary>
     public SyntaxNode? SyntaxRoot => syntaxRoot;
 
-    /// <summary>Bitácora acumulada de la pila semántica (una línea por reducción).</summary>
     public IReadOnlyList<string> SemanticPileLog => semanticPileLog;
 
-    /// <summary>Símbolos con ámbito y dirección simulada, en orden de memoria.</summary>
     public IReadOnlyList<SymbolAssignment> ScopedSymbols => symbolTable.Entries;
 
     private static readonly HashSet<string> InstructionStarts =
@@ -382,8 +379,10 @@ public sealed class TopDownParser
             Token idToken = Current;
             Expect(TokenKinds.Identifier);
             CheckInstructionEnd();
-            // read actualiza la variable visible o la declara, y borra su valor conocido.
-            symbolTable.Assign(idToken.Lexeme, null, null);
+            // La entrada no determina un tipo: necesita un destino ya tipado.
+            SemanticValue destination = GetIdentifierValue(idToken);
+            if (!destination.IsInvalid)
+                symbolTable.Assign(idToken.Lexeme, null, null);
             var node = new SyntaxNode("READ", null) { Line = readToken.Line, Column = readToken.Column };
             node.AddLeaf(TokenKinds.Read, readToken);
             node.AddLeaf(TokenKinds.Identifier, idToken);
@@ -507,17 +506,23 @@ public sealed class TopDownParser
                 Expect(TokenKinds.Identifier);
                 Token fromToken = Current;
                 Expect(TokenKinds.From);
+                int syntaxErrorsBefore = errors.Count;
                 Token fromExprToken = Current;
                 (SemanticValue fromValue, SyntaxNode fromNode) = ParseExpressionWithTree();
-                RequireNumeric(fromValue, fromExprToken, "El límite inicial de 'for'");
+                bool validFrom = RequireNumeric(fromValue, fromExprToken, "El límite inicial de 'for'");
                 Token toToken = Current;
                 Expect(TokenKinds.To);
                 Token toExprToken = Current;
                 (SemanticValue toValue, SyntaxNode toNode) = ParseExpressionWithTree();
-                RequireNumeric(toValue, toExprToken, "El límite final de 'for'");
+                bool validTo = RequireNumeric(toValue, toExprToken, "El límite final de 'for'");
                 Token doToken = ReadSeparator(TokenKinds.Do, forToken);
-                // El nombre de control se introduce solo una vez reconocida la cabecera.
-                symbolTable.Declare(idToken.Lexeme);
+                // El control es local y usa el tipo numérico común de los límites.
+                // Una cabecera inválida conserva un enlace inválido para no usar
+                // por accidente un homónimo externo ni generar errores en cascada.
+                string? controlType = validFrom && validTo && errors.Count == syntaxErrorsBefore
+                    ? GetNumericType(fromValue, toValue)
+                    : SemanticTypes.Invalid;
+                symbolTable.Declare(idToken.Lexeme, controlType);
                 SyntaxNode body;
                 loopDepth++;
                 try
@@ -603,7 +608,7 @@ public sealed class TopDownParser
             CheckInstructionEnd();
             bool validArgument = RequireNumeric(argValue, argumentToken, "El argumento de 'rand'");
             if (validArgument && errors.Count == syntaxErrorsBefore)
-                symbolTable.Assign(idToken.Lexeme, null, null);
+                AssignCompatible(idToken, new SemanticValue(SemanticTypes.Integer), null);
 
             var node = new SyntaxNode("RAND", null) { Line = randToken.Line, Column = randToken.Column };
             node.AddLeaf(TokenKinds.Rand, randToken);
@@ -640,7 +645,7 @@ public sealed class TopDownParser
         });
     }
 
-    // EXP -> EXP_OR (construye árbol + mantiene la pila semántica intacta)
+    // EXP -> EXP_OR
     private (SemanticValue Value, SyntaxNode Node) ParseExpressionWithTree()
     {
         expressionDepth++;
@@ -662,7 +667,13 @@ public sealed class TopDownParser
             }
 
             if (errors.Count != syntaxErrorsBefore)
+            {
                 result = SemanticValue.Invalid;
+                // Una reparación local también deja la expresión incompleta:
+                // no publicar comprobaciones parciales de una estructura inválida.
+                if (semanticErrors.Count > semanticErrorsBefore)
+                    semanticErrors.RemoveRange(semanticErrorsBefore, semanticErrors.Count - semanticErrorsBefore);
+            }
 
             // Las expresiones entre paréntesis contribuyen a la traza de su
             // expresión externa, pero no la publican dos veces.
@@ -696,7 +707,6 @@ public sealed class TopDownParser
         }
     }
 
-    // Compatibilidad: callers que solo necesitan el valor semántico.
     private SemanticValue ParseExpression() => ParseExpressionWithTree().Value;
 
     // EXP_OR -> EXP_AND EXP_OR_T
@@ -1043,21 +1053,62 @@ public sealed class TopDownParser
 
     private void CommitAssignment(SemanticValue expression)
     {
-        if (assignmentToken is null || expression.IsInvalid)
+        if (assignmentToken is null || expression.IsInvalid || expression.IsUnknown)
             return;
 
         string? value = assignmentExpressionIsSimple && expression.IsConstant
             ? expression.Value
             : null;
 
-        symbolTable.Assign(assignmentToken.Lexeme, expression.DataType, value);
+        AssignCompatible(assignmentToken, expression, value);
     }
+
+    private void AssignCompatible(Token destination, SemanticValue source, string? value)
+    {
+        SymbolAssignment? existing = symbolTable.Lookup(destination.Lexeme);
+        if (existing is null)
+        {
+            symbolTable.Declare(destination.Lexeme, source.DataType, value);
+            return;
+        }
+
+        if (existing.DataType == SemanticTypes.Invalid)
+            return;
+
+        if (!CanAssign(existing.DataType, source.DataType))
+        {
+            AddSemanticError(destination,
+                $"No se puede asignar {TypeName(source)} a la variable '{destination.Lexeme}' de tipo {existing.DataType ?? "desconocido"}.",
+                "SEM_ASSIGNMENT_TYPE");
+            return;
+        }
+
+        // La ampliación numérica no cambia el tipo fijado por la declaración.
+        symbolTable.Assign(destination.Lexeme, null, value);
+    }
+
+    private static bool CanAssign(string? destination, string? source) =>
+        destination is not null && source is not null &&
+        (destination == source ||
+         destination == SemanticTypes.Decimal && source == SemanticTypes.Integer ||
+         destination == SemanticTypes.Exponential &&
+             source is SemanticTypes.Integer or SemanticTypes.Decimal);
 
     private SemanticValue GetIdentifierValue(Token token)
     {
         SymbolAssignment? assignment = symbolTable.Lookup(token.Lexeme);
-        if (assignment is null || string.IsNullOrWhiteSpace(assignment.DataType))
-            return SemanticValue.Unknown;
+        if (assignment is null)
+        {
+            AddSemanticError(token,
+                $"La variable '{token.Lexeme}' no está declarada en un ámbito visible. Inicialízala antes de utilizarla.",
+                "SEM_UNDECLARED_VARIABLE");
+            return SemanticValue.Invalid;
+        }
+        if (string.IsNullOrWhiteSpace(assignment.DataType))
+        {
+            AddSemanticError(token, $"No se conoce el tipo de la variable '{token.Lexeme}'.", "SEM_UNKNOWN_TYPE");
+            return SemanticValue.Invalid;
+        }
 
         return new SemanticValue(assignment.DataType, assignment.Value, false);
     }
@@ -1211,20 +1262,16 @@ public sealed class TopDownParser
         semanticErrors.Add(new SemanticError(token, message, code));
     }
 
-    private static bool CanBeNumeric(SemanticValue value) => value.IsUnknown || value.IsNumeric;
+    private static bool CanBeNumeric(SemanticValue value) => value.IsNumeric;
 
     private static bool CanBeBoolean(SemanticValue value) =>
-        value.IsUnknown || value.DataType == SemanticTypes.Boolean;
+        value.DataType == SemanticTypes.Boolean;
 
     private static bool CanBeCompared(SemanticValue left, SemanticValue right, string operatorKind)
     {
         if (operatorKind is TokenKinds.LessThan or TokenKinds.LessThanOrEqual or
             TokenKinds.GreaterThan or TokenKinds.GreaterThanOrEqual)
-            return (left.IsUnknown || left.IsNumeric) &&
-                   (right.IsUnknown || right.IsNumeric);
-
-        if (left.IsUnknown || right.IsUnknown)
-            return true;
+            return left.IsNumeric && right.IsNumeric;
 
         if (left.IsNumeric && right.IsNumeric)
             return true;

@@ -1,4 +1,5 @@
 start
+  x = 0
   if !(x < 10) then
     write x
   endif

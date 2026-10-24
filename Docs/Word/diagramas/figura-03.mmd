@@ -1,0 +1,10 @@
+flowchart TD
+    A[Reconocer ID = EXP] --> B[Obtener atributo de EXP]
+    B --> C{Expresión válida y tipo conocido}
+    C -->|No| D[No declarar ni sobrescribir el destino]
+    C -->|Sí| E[Buscar destino en ámbitos visibles]
+    E --> F{Existe el símbolo}
+    F -->|No| G[Declarar con el tipo inferido]
+    F -->|Sí| H{Tipo de origen compatible con destino}
+    H -->|Sí| I[Actualizar valor conocido y conservar tipo]
+    H -->|No| J[Emitir error y conservar símbolo anterior]

@@ -1,0 +1,4 @@
+start
+  x = "text"
+  rand x, 10
+end

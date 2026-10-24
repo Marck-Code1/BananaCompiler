@@ -29,13 +29,10 @@ public sealed class ParseResult
     public IReadOnlyList<SemanticError> SemanticErrors { get; }
     public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
-    /// <summary>Raíz del árbol de sintaxis (S). Null solo si no se pudo construir.</summary>
     public SyntaxNode? SyntaxTree { get; }
 
-    /// <summary>Símbolos con ámbito y dirección simulada, en orden de memoria.</summary>
     public IReadOnlyList<SymbolAssignment> ScopedSymbols { get; }
 
-    /// <summary>Bitácora de reducciones de la pila semántica.</summary>
     public IReadOnlyList<string> SemanticPileLog { get; }
 
     public static ParseResult Ok(

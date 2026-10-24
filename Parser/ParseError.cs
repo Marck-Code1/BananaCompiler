@@ -85,6 +85,8 @@ public sealed class ParseError
         ["expression"] = "expresión",
         ["condition"] = "condición",
         ["relational operator"] = "operador relacional",
+        ["additive operator"] = "operador de suma o resta",
+        ["multiplicative operator"] = "operador de multiplicación, división o módulo",
         ["ID, CN, or CE5"] = "identificador, número o '('",
         ["PR19 or PR9"] = "'true' o 'false'"
     };

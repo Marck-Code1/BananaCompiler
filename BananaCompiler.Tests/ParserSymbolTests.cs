@@ -44,10 +44,8 @@ public sealed class ParserSymbolTests
     {
         ParseResult result = Parse("start if true then local = \"text\" endif y = local + 1 end");
 
-        // El lenguaje sigue admitiendo identificadores de tipo desconocido;
-        // lo importante es no recuperar el tipo string de un bloque cerrado.
-        Assert.True(result.Success);
-        Assert.Equal(SemanticTypes.Integer, result.ScopedSymbols.Single(symbol => symbol.Name == "y").DataType);
+        Assert.Equal("SEM_UNDECLARED_VARIABLE", Assert.Single(result.SemanticErrors).Code);
+        Assert.DoesNotContain(result.ScopedSymbols, symbol => symbol.Name == "y");
     }
 
     [Fact]
@@ -55,11 +53,8 @@ public sealed class ParserSymbolTests
     {
         ParseResult result = Parse("start if true then x = \"text\" endif x = missing end");
 
-        Assert.True(result.Success);
-        SymbolAssignment global = result.ScopedSymbols.Single(symbol => symbol.Scope == "global");
-        Assert.Equal("x", global.Name);
-        Assert.Null(global.DataType);
-        Assert.Null(global.Value);
+        Assert.Equal("SEM_UNDECLARED_VARIABLE", Assert.Single(result.SemanticErrors).Code);
+        Assert.DoesNotContain(result.ScopedSymbols, symbol => symbol.Scope == "global");
     }
 
     [Theory]
@@ -117,20 +112,21 @@ public sealed class ParserSymbolTests
     {
         ParseResult result = Parse("start do local = \"text\" end while local y = local + 1 end");
 
-        SemanticError error = Assert.Single(result.SemanticErrors);
-        Assert.Contains("debe ser booleana", error.Message);
-        Assert.Equal(SemanticTypes.Integer, result.ScopedSymbols.Single(symbol => symbol.Name == "y").DataType);
+        Assert.Equal(2, result.SemanticErrors.Count);
+        Assert.Equal("SEM_CONDITION_TYPE", result.SemanticErrors[0].Code);
+        Assert.Equal("SEM_UNDECLARED_VARIABLE", result.SemanticErrors[1].Code);
+        Assert.DoesNotContain(result.ScopedSymbols, symbol => symbol.Name == "y");
     }
 
     [Fact]
-    public void FinalAddressesReflectTypeChanges()
+    public void FinalAddressesReflectStringGrowth()
     {
-        ParseResult result = Parse("start a = 1 b = 2 a = 1.5 end");
+        ParseResult result = Parse("start a = \"a\" b = 2 a = \"longer\" end");
 
         Assert.True(result.Success);
         SymbolAssignment a = result.ScopedSymbols.Single(symbol => symbol.Name == "a");
         SymbolAssignment b = result.ScopedSymbols.Single(symbol => symbol.Name == "b");
-        Assert.Equal(8, a.Size);
+        Assert.Equal(14, a.Size);
         Assert.True(b.Address >= a.Address + a.Size);
     }
 

@@ -1,8 +1,5 @@
 namespace BananaCompiler.Parser;
 
-/// <summary>
-/// Pila de atributos semánticos utilizada por las reducciones de expresiones.
-/// </summary>
 public sealed class SemanticStack
 {
     private readonly Stack<SemanticValue> values = [];

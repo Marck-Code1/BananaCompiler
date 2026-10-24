@@ -1,0 +1,6 @@
+start
+  if true then
+    local = 1
+  endif
+  write local
+end

@@ -1,4 +1,5 @@
 start
+  asd = true
   x = 0
   if (x < 10) && asd then
     write x

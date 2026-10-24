@@ -142,7 +142,7 @@ real.
 - **Segmento simulado** desde `0x1000` con alineación a 4 bytes:
   `AssignAddresses()` calcula las direcciones **al finalizar el análisis**,
   usando los tamaños finales. Cada entrada recibe `base + offset alineado`;
-  el offset avanza `max(tamaño, 4)`. Así, un cambio de tipo o un crecimiento
+  el offset avanza `max(tamaño, 4)`. Así, un crecimiento
   de cadena no solapa la siguiente entrada. Las direcciones no son estables
   durante el parseo ni representan memoria real. Para cadenas cuyo valor no
   se conoce, el tamaño mostrado es una estimación mínima de 2 bytes.
@@ -180,17 +180,21 @@ otra fuera colisionaban y no se sabía dónde se declaró cada variable.
   diccionario global de respaldo. Las entradas cerradas se conservan solo
   para el reporte. El ámbito de `do` incluye su condición final.
 - **Operaciones separadas**: `Declare` crea una entrada local y permite
-  ocultar una externa; `Assign` actualiza la entrada visible más cercana o
-  declara si no existe. Las asignaciones, `read` y `rand` usan `Assign`;
-  la variable de control del `for` usa `Declare` y es local al ciclo.
+   ocultar una externa; `Assign` actualiza la entrada visible más cercana o
+   declara si no existe. Son operaciones de almacenamiento de bajo nivel;
+   el parser aplica las reglas del lenguaje antes de usarlas. La primera
+   asignación válida y `rand` pueden declarar; una reasignación debe ser
+   compatible con el tipo fijo y `read` exige un destino ya declarado.
+   El control de `for` usa `Declare`, es local e infiere el tipo común de sus límites.
 - Un valor `null` en `Assign` **borra el valor conocido anterior**. Un tipo
   `null` conserva el tipo previo, si existe. Las expresiones semánticamente
   inválidas no sobrescriben la última asignación válida.
 - `ParseResult.ScopedSymbols` es la única colección de símbolos del resultado,
-  en orden de memoria. Se eliminaron `SymbolAssignments` y las copias
-  semánticas de la interfaz. Los identificadores sin declaración siguen
-  aceptándose como de tipo desconocido, como antes; no se añadió un nuevo
-  diagnóstico de variable no declarada.
+   en orden de memoria. Se eliminaron `SymbolAssignments` y las copias
+   semánticas de la interfaz. Los nombres inexistentes o fuera de ámbito
+   generan `SEM_UNDECLARED_VARIABLE`; un valor desconocido con tipo conocido
+   sigue siendo válido. Una cabecera inválida de `for` conserva un enlace
+   local `<inválido>` para evitar diagnósticos derivados en el cuerpo.
 
 ---
 

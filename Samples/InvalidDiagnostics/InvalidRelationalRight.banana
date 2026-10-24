@@ -1,4 +1,5 @@
 start
+  x = 0
   if x < then
     write x
   endif

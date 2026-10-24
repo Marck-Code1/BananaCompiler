@@ -2,15 +2,8 @@ namespace BananaCompiler
 {
     partial class Form1
     {
-        /// <summary>
-        ///  Required designer variable.
-        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary>
-        ///  Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -22,13 +15,9 @@ namespace BananaCompiler
 
         #region Windows Form Designer generated code
 
-        /// <summary>
-        ///  Required method for Designer support - do not modify
-        ///  the contents of this method with the code editor.
-        /// </summary>
         private void InitializeComponent()
         {
-            DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             txtCode = new ScintillaNET.Scintilla();
             txtTokens = new ScintillaNET.Scintilla();
@@ -60,6 +49,7 @@ namespace BananaCompiler
             lblSubtitle = new Label();
             label1 = new Label();
             txtReporte = new RichTextBox();
+            label2 = new Label();
             ((System.ComponentModel.ISupportInitialize)dgSimbolos).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgErrores).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgErroresSintacticos).BeginInit();
@@ -71,11 +61,10 @@ namespace BananaCompiler
             txtCode.AutocompleteListSelectedBackColor = Color.FromArgb(0, 120, 215);
             txtCode.Font = new Font("Consolas", 9.75F);
             txtCode.LexerName = null;
-            txtCode.Location = new Point(32, 160);
-            txtCode.Margin = new Padding(2, 2, 2, 2);
+            txtCode.Location = new Point(46, 267);
             txtCode.Name = "txtCode";
             txtCode.ScrollWidth = 74;
-            txtCode.Size = new Size(450, 225);
+            txtCode.Size = new Size(641, 372);
             txtCode.TabIndex = 0;
             txtCode.Text = "start\r\n\r\nend";
             txtCode.TextChanged += txtCode_TextChanged;
@@ -85,20 +74,18 @@ namespace BananaCompiler
             txtTokens.AutocompleteListSelectedBackColor = Color.FromArgb(0, 120, 215);
             txtTokens.Font = new Font("Consolas", 9.75F);
             txtTokens.LexerName = null;
-            txtTokens.Location = new Point(569, 160);
-            txtTokens.Margin = new Padding(2, 2, 2, 2);
+            txtTokens.Location = new Point(813, 267);
             txtTokens.Name = "txtTokens";
             txtTokens.ScrollWidth = 74;
-            txtTokens.Size = new Size(450, 225);
+            txtTokens.Size = new Size(641, 372);
             txtTokens.TabIndex = 1;
             txtTokens.TextChanged += txtTokens_TextChanged_Lines;
             // 
             // btnCargar
             // 
-            btnCargar.Location = new Point(32, 389);
-            btnCargar.Margin = new Padding(2, 2, 2, 2);
+            btnCargar.Location = new Point(46, 648);
             btnCargar.Name = "btnCargar";
-            btnCargar.Size = new Size(78, 23);
+            btnCargar.Size = new Size(111, 38);
             btnCargar.TabIndex = 2;
             btnCargar.Text = "Cargar Programa";
             btnCargar.UseVisualStyleBackColor = true;
@@ -106,10 +93,9 @@ namespace BananaCompiler
             // 
             // btnGuardarPrograma
             // 
-            btnGuardarPrograma.Location = new Point(118, 389);
-            btnGuardarPrograma.Margin = new Padding(2, 2, 2, 2);
+            btnGuardarPrograma.Location = new Point(169, 648);
             btnGuardarPrograma.Name = "btnGuardarPrograma";
-            btnGuardarPrograma.Size = new Size(78, 23);
+            btnGuardarPrograma.Size = new Size(111, 38);
             btnGuardarPrograma.TabIndex = 4;
             btnGuardarPrograma.Text = "Guardar programa";
             btnGuardarPrograma.UseVisualStyleBackColor = true;
@@ -117,10 +103,9 @@ namespace BananaCompiler
             // 
             // btnGuardarArchivo
             // 
-            btnGuardarArchivo.Location = new Point(569, 389);
-            btnGuardarArchivo.Margin = new Padding(2, 2, 2, 2);
+            btnGuardarArchivo.Location = new Point(813, 648);
             btnGuardarArchivo.Name = "btnGuardarArchivo";
-            btnGuardarArchivo.Size = new Size(78, 23);
+            btnGuardarArchivo.Size = new Size(111, 38);
             btnGuardarArchivo.TabIndex = 5;
             btnGuardarArchivo.Text = "Guardar archivo";
             btnGuardarArchivo.UseVisualStyleBackColor = true;
@@ -131,12 +116,11 @@ namespace BananaCompiler
             dgSimbolos.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgSimbolos.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgSimbolos.Columns.AddRange(new DataGridViewColumn[] { ID, Nombre, TipoDato, Valor, Ambito, Direccion, Tamano });
-            dgSimbolos.Location = new Point(32, 458);
-            dgSimbolos.Margin = new Padding(2, 2, 2, 2);
+            dgSimbolos.Location = new Point(46, 763);
             dgSimbolos.Name = "dgSimbolos";
             dgSimbolos.RowHeadersVisible = false;
             dgSimbolos.RowHeadersWidth = 62;
-            dgSimbolos.Size = new Size(450, 126);
+            dgSimbolos.Size = new Size(643, 210);
             dgSimbolos.TabIndex = 6;
             // 
             // ID
@@ -155,7 +139,7 @@ namespace BananaCompiler
             // 
             // TipoDato
             // 
-            TipoDato.HeaderText = "Tipo de dato";
+            TipoDato.HeaderText = "Tipo";
             TipoDato.MinimumWidth = 8;
             TipoDato.Name = "TipoDato";
             TipoDato.ReadOnly = true;
@@ -183,7 +167,7 @@ namespace BananaCompiler
             // 
             // Tamano
             // 
-            Tamano.HeaderText = "Tamaño (bytes)";
+            Tamano.HeaderText = "Tamaño";
             Tamano.MinimumWidth = 8;
             Tamano.Name = "Tamano";
             Tamano.ReadOnly = true;
@@ -193,18 +177,17 @@ namespace BananaCompiler
             dgErrores.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgErrores.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgErrores.Columns.AddRange(new DataGridViewColumn[] { Linea, Error });
-            dgErrores.Location = new Point(569, 458);
-            dgErrores.Margin = new Padding(2, 2, 2, 2);
+            dgErrores.Location = new Point(813, 763);
             dgErrores.Name = "dgErrores";
             dgErrores.RowHeadersVisible = false;
             dgErrores.RowHeadersWidth = 62;
-            dgErrores.Size = new Size(450, 126);
+            dgErrores.Size = new Size(643, 210);
             dgErrores.TabIndex = 7;
             // 
             // Linea
             // 
             Linea.FillWeight = 30F;
-            Linea.HeaderText = "Linea";
+            Linea.HeaderText = "Línea:Columna";
             Linea.MinimumWidth = 8;
             Linea.Name = "Linea";
             Linea.ReadOnly = true;
@@ -223,20 +206,19 @@ namespace BananaCompiler
             dgErroresSintacticos.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
             dgErroresSintacticos.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgErroresSintacticos.Columns.AddRange(new DataGridViewColumn[] { LineaSintactica, ErrorSintactico });
-            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle2.BackColor = SystemColors.Window;
-            dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F);
-            dataGridViewCellStyle2.ForeColor = SystemColors.ControlText;
-            dataGridViewCellStyle2.SelectionBackColor = SystemColors.Highlight;
-            dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
-            dataGridViewCellStyle2.WrapMode = DataGridViewTriState.True;
-            dgErroresSintacticos.DefaultCellStyle = dataGridViewCellStyle2;
-            dgErroresSintacticos.Location = new Point(33, 619);
-            dgErroresSintacticos.Margin = new Padding(2, 2, 2, 2);
+            dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle1.BackColor = SystemColors.Window;
+            dataGridViewCellStyle1.Font = new Font("Segoe UI", 9F);
+            dataGridViewCellStyle1.ForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
+            dgErroresSintacticos.DefaultCellStyle = dataGridViewCellStyle1;
+            dgErroresSintacticos.Location = new Point(47, 1032);
             dgErroresSintacticos.Name = "dgErroresSintacticos";
             dgErroresSintacticos.RowHeadersVisible = false;
             dgErroresSintacticos.RowHeadersWidth = 62;
-            dgErroresSintacticos.Size = new Size(986, 126);
+            dgErroresSintacticos.Size = new Size(1409, 210);
             dgErroresSintacticos.TabIndex = 20;
             // 
             // LineaSintactica
@@ -260,21 +242,20 @@ namespace BananaCompiler
             lblLenguaje.AutoSize = true;
             lblLenguaje.Font = new Font("Segoe UI", 18F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lblLenguaje.ForeColor = SystemColors.Highlight;
-            lblLenguaje.Location = new Point(136, 32);
-            lblLenguaje.Margin = new Padding(2, 0, 2, 0);
+            lblLenguaje.Location = new Point(194, 53);
             lblLenguaje.Name = "lblLenguaje";
-            lblLenguaje.Size = new Size(174, 32);
+            lblLenguaje.Size = new Size(226, 48);
             lblLenguaje.TabIndex = 8;
-            lblLenguaje.Text = "Banana v0.0.1";
+            lblLenguaje.Text = "Banana v0.1";
+            lblLenguaje.Click += lblLenguaje_Click;
             // 
             // pictureBox1
             // 
             pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
             pictureBox1.InitialImage = (Image)resources.GetObject("pictureBox1.InitialImage");
-            pictureBox1.Location = new Point(32, 11);
-            pictureBox1.Margin = new Padding(2, 2, 2, 2);
+            pictureBox1.Location = new Point(46, 18);
             pictureBox1.Name = "pictureBox1";
-            pictureBox1.Size = new Size(100, 101);
+            pictureBox1.Size = new Size(143, 168);
             pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBox1.TabIndex = 10;
             pictureBox1.TabStop = false;
@@ -283,10 +264,9 @@ namespace BananaCompiler
             // 
             richTextBox1.BackColor = SystemColors.Control;
             richTextBox1.BorderStyle = BorderStyle.None;
-            richTextBox1.Location = new Point(735, 32);
-            richTextBox1.Margin = new Padding(2, 2, 2, 2);
+            richTextBox1.Location = new Point(1110, 53);
             richTextBox1.Name = "richTextBox1";
-            richTextBox1.Size = new Size(283, 67);
+            richTextBox1.Size = new Size(344, 50);
             richTextBox1.TabIndex = 12;
             richTextBox1.Text = "\n";
             // 
@@ -294,9 +274,10 @@ namespace BananaCompiler
             // 
             lblCodigo.AutoSize = true;
             lblCodigo.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            lblCodigo.Location = new Point(32, 133);
+            lblCodigo.Location = new Point(46, 222);
+            lblCodigo.Margin = new Padding(4, 0, 4, 0);
             lblCodigo.Name = "lblCodigo";
-            lblCodigo.Size = new Size(157, 25);
+            lblCodigo.Size = new Size(236, 40);
             lblCodigo.TabIndex = 13;
             lblCodigo.Text = "Programa Fuente";
             // 
@@ -304,9 +285,10 @@ namespace BananaCompiler
             // 
             lblTokens.AutoSize = true;
             lblTokens.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            lblTokens.Location = new Point(569, 133);
+            lblTokens.Location = new Point(813, 222);
+            lblTokens.Margin = new Padding(4, 0, 4, 0);
             lblTokens.Name = "lblTokens";
-            lblTokens.Size = new Size(164, 25);
+            lblTokens.Size = new Size(247, 40);
             lblTokens.TabIndex = 14;
             lblTokens.Text = "Archivo de Tokens";
             // 
@@ -314,9 +296,10 @@ namespace BananaCompiler
             // 
             lblTabla.AutoSize = true;
             lblTabla.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            lblTabla.Location = new Point(32, 431);
+            lblTabla.Location = new Point(46, 718);
+            lblTabla.Margin = new Padding(4, 0, 4, 0);
             lblTabla.Name = "lblTabla";
-            lblTabla.Size = new Size(164, 25);
+            lblTabla.Size = new Size(248, 40);
             lblTabla.TabIndex = 15;
             lblTabla.Text = "Tabla de Símbolos";
             // 
@@ -324,9 +307,10 @@ namespace BananaCompiler
             // 
             lblErrores.AutoSize = true;
             lblErrores.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            lblErrores.Location = new Point(569, 431);
+            lblErrores.Location = new Point(813, 718);
+            lblErrores.Margin = new Padding(4, 0, 4, 0);
             lblErrores.Name = "lblErrores";
-            lblErrores.Size = new Size(138, 25);
+            lblErrores.Size = new Size(205, 40);
             lblErrores.TabIndex = 16;
             lblErrores.Text = "Errores Léxicos";
             // 
@@ -334,45 +318,60 @@ namespace BananaCompiler
             // 
             lblErroresSintacticos.AutoSize = true;
             lblErroresSintacticos.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            lblErroresSintacticos.Location = new Point(33, 592);
+            lblErroresSintacticos.Location = new Point(47, 987);
+            lblErroresSintacticos.Margin = new Padding(4, 0, 4, 0);
             lblErroresSintacticos.Name = "lblErroresSintacticos";
-            lblErroresSintacticos.Size = new Size(167, 25);
+            lblErroresSintacticos.Size = new Size(249, 40);
             lblErroresSintacticos.TabIndex = 21;
             lblErroresSintacticos.Text = "Errores Sintácticos";
             // 
             // lblSubtitle
             // 
             lblSubtitle.AutoSize = true;
-            lblSubtitle.Location = new Point(141, 64);
+            lblSubtitle.Location = new Point(201, 107);
+            lblSubtitle.Margin = new Padding(4, 0, 4, 0);
             lblSubtitle.Name = "lblSubtitle";
-            lblSubtitle.Size = new Size(163, 15);
+            lblSubtitle.Size = new Size(336, 25);
             lblSubtitle.TabIndex = 17;
-            lblSubtitle.Text = "Analizador Léxico y Sintáctico";
+            lblSubtitle.Text = "Analizador Léxico, Sintáctico y Semántico";
             // 
             // label1
             // 
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            label1.Location = new Point(32, 759);
+            label1.Location = new Point(46, 1265);
+            label1.Margin = new Padding(4, 0, 4, 0);
             label1.Name = "label1";
-            label1.Size = new Size(77, 25);
+            label1.Size = new Size(117, 40);
             label1.TabIndex = 18;
             label1.Text = "Reporte";
             // 
             // txtReporte
             // 
-            txtReporte.Location = new Point(33, 787);
+            txtReporte.Location = new Point(47, 1312);
+            txtReporte.Margin = new Padding(4, 5, 4, 5);
             txtReporte.Name = "txtReporte";
             txtReporte.ReadOnly = true;
-            txtReporte.Size = new Size(986, 60);
+            txtReporte.Size = new Size(1407, 97);
             txtReporte.TabIndex = 19;
             txtReporte.Text = "";
             // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(1120, 72);
+            label2.Margin = new Padding(4, 0, 4, 0);
+            label2.Name = "label2";
+            label2.Size = new Size(334, 50);
+            label2.TabIndex = 22;
+            label2.Text = "23100147 Marco Antonio Celis Mata\r\n23100218 Cesar Alejandro Vazquez Soto";
+            // 
             // Form1
             // 
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1050, 637);
+            ClientSize = new Size(1798, 1427);
+            Controls.Add(label2);
             Controls.Add(txtReporte);
             Controls.Add(label1);
             Controls.Add(lblSubtitle);
@@ -393,7 +392,6 @@ namespace BananaCompiler
             Controls.Add(txtTokens);
             Controls.Add(txtCode);
             Icon = (Icon)resources.GetObject("$this.Icon");
-            Margin = new Padding(2, 2, 2, 2);
             Name = "Form1";
             Text = "Banana v0.0.1 - Analizador Léxico y Sintáctico";
             Load += Form1_Load;
@@ -418,13 +416,6 @@ namespace BananaCompiler
         private Label lblLenguaje;
         private PictureBox pictureBox1;
         private RichTextBox richTextBox1;
-        private DataGridViewTextBoxColumn ID;
-        private DataGridViewTextBoxColumn Nombre;
-        private DataGridViewTextBoxColumn TipoDato;
-        private DataGridViewTextBoxColumn Valor;
-        private DataGridViewTextBoxColumn Ambito;
-        private DataGridViewTextBoxColumn Direccion;
-        private DataGridViewTextBoxColumn Tamano;
         private Label lblCodigo;
         private Label lblTokens;
         private Label lblTabla;
@@ -437,5 +428,13 @@ namespace BananaCompiler
         private DataGridViewTextBoxColumn ErrorSintactico;
         private Label label1;
         private RichTextBox txtReporte;
+        private Label label2;
+        private DataGridViewTextBoxColumn ID;
+        private DataGridViewTextBoxColumn Nombre;
+        private DataGridViewTextBoxColumn TipoDato;
+        private DataGridViewTextBoxColumn Valor;
+        private DataGridViewTextBoxColumn Ambito;
+        private DataGridViewTextBoxColumn Direccion;
+        private DataGridViewTextBoxColumn Tamano;
     }
 }

@@ -198,6 +198,50 @@ public sealed class DiagnosticRecoveryTests
     }
 
     [Theory]
+    [InlineData("write (missing")]
+    [InlineData("x = (true + 1")]
+    [InlineData("if (missing then endif")]
+    [InlineData("while (true + 1 do endwhile")]
+    [InlineData("do end while (missing")]
+    [InlineData("move (true + 1, 2")]
+    [InlineData("move 1, (missing")]
+    [InlineData("rand x, (true + 1")]
+    [InlineData("for i from (missing to 2 do endfor")]
+    [InlineData("for i from 1 to (true + 1 do endfor")]
+    public void LocallyRepairedExpressionsDiscardTheirPartialSemanticDiagnostics(string instruction)
+    {
+        ParseResult result = Parse($"start {instruction} y = 2 end");
+
+        Assert.Equal("SYN_MISSING_TOKEN", Assert.Single(result.Errors).Code);
+        Assert.Empty(result.SemanticErrors);
+        Assert.Empty(result.SemanticPileLog);
+        Assert.Equal("2", result.ScopedSymbols.Single(symbol => symbol.Name == "y").Value);
+    }
+
+    [Fact]
+    public void RepairedExpressionDoesNotRemoveEarlierOrLaterIndependentSemanticErrors()
+    {
+        ParseResult result = Parse("start write earlier x = (true + 1 write later end");
+
+        Assert.Equal("SYN_MISSING_TOKEN", Assert.Single(result.Errors).Code);
+        Assert.Equal(2, result.SemanticErrors.Count);
+        Assert.Equal("earlier", result.SemanticErrors[0].Token.Lexeme);
+        Assert.Equal("later", result.SemanticErrors[1].Token.Lexeme);
+        Assert.All(result.SemanticErrors, error => Assert.Equal("SEM_UNDECLARED_VARIABLE", error.Code));
+    }
+
+    [Fact]
+    public void ACompleteOtherArgumentKeepsItsIndependentSemanticError()
+    {
+        ParseResult result = Parse("start move true, (missing end");
+
+        Assert.Equal("SYN_MISSING_TOKEN", Assert.Single(result.Errors).Code);
+        SemanticError error = Assert.Single(result.SemanticErrors);
+        Assert.Equal("SEM_ARGUMENT_TYPE", error.Code);
+        Assert.Contains("primer argumento", error.Message);
+    }
+
+    [Theory]
     [InlineData("if\n  123\nthen endif", 3, 3)]
     [InlineData("while 123 do endwhile", 2, 7)]
     public void ConditionDiagnosticPointsAtTheExpression(string instruction, int line, int column)
@@ -403,6 +447,12 @@ public sealed class DiagnosticRecoveryTests
     [InlineData("MissingRightParenIf.banana", 1, 0)]
     [InlineData("MissingThenIf.banana", 1, 0)]
     [InlineData("MultipleErrors.banana", 2, 1)]
+    [InlineData("UndeclaredVariable.banana", 0, 1)]
+    [InlineData("InitialSelfReference.banana", 0, 1)]
+    [InlineData("OutOfScopeVariable.banana", 0, 1)]
+    [InlineData("IncompatibleAssignment.banana", 0, 1)]
+    [InlineData("ReadUndeclaredVariable.banana", 0, 1)]
+    [InlineData("InvalidRandDestination.banana", 0, 1)]
     public void ExistingSamplesHaveExactlyTheExpectedIndependentErrors(string filename, int syntax, int semantic)
     {
         string path = Path.Combine(AppContext.BaseDirectory, "Samples", "InvalidDiagnostics", filename);

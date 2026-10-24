@@ -1,0 +1,11 @@
+flowchart TD
+    A["`Expresión reconocida`"] --> B["`Resolver nombres y validar operadores`"]
+    B --> C{"`¿Atributo válido?`"}
+    C -- Sí --> D["`Comprobar compatibilidad del destino`"]
+    D --> E{"`¿Asignación compatible?`"}
+    E -- Sí --> F["`Declarar o actualizar el símbolo`"]
+    E -- No --> G["`Informar error y conservar registro previo`"]
+    C -- No --> H["`Propagar atributo inválido y no confirmar asignación`"]
+    H --> I["`Continuar con instrucciones independientes`"]
+    G --> I
+    F --> I

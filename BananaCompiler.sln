@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35219.272
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BananaCompiler", "BananaCompiler.csproj", "{6A337EB9-06F0-43AE-878C-DFD2D8643131}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BananaCompiler.Tests", "BananaCompiler.Tests\BananaCompiler.Tests.csproj", "{6F90170E-2D67-44CC-9E64-E48836A6F4CB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6A337EB9-06F0-43AE-878C-DFD2D8643131}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A337EB9-06F0-43AE-878C-DFD2D8643131}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A337EB9-06F0-43AE-878C-DFD2D8643131}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A337EB9-06F0-43AE-878C-DFD2D8643131}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F90170E-2D67-44CC-9E64-E48836A6F4CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F90170E-2D67-44CC-9E64-E48836A6F4CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F90170E-2D67-44CC-9E64-E48836A6F4CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F90170E-2D67-44CC-9E64-E48836A6F4CB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {47DF0CEC-E3CC-4564-9758-AFC97E85DF8F}
+	EndGlobalSection
+EndGlobal

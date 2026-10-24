@@ -1,19 +1,11 @@
 namespace BananaCompiler.Parser;
 
-/// <summary>
-/// Tabla de símbolos con una pila de ámbitos independientes.
-/// Las rutas textuales solo sirven para mostrar el ámbito de declaración;
-/// la búsqueda recorre los diccionarios activos del más interno al global.
-/// Las entradas de ámbitos cerrados se conservan para el reporte.
-/// <para>Las direcciones son una simulación didáctica: se calculan al finalizar
-/// el análisis mediante <see cref="AssignAddresses"/>, con alineación a 4 bytes.
-/// No representan reservas reales de memoria ni direcciones estables durante el parseo.</para>
-/// </summary>
 public sealed class ScopedSymbolTable
 {
     public const int BaseAddress = 0x1000;
     private const int Alignment = 4;
 
+    // Conserva los símbolos de ámbitos cerrados para el reporte.
     private readonly List<SymbolAssignment> entries = [];
     private readonly List<Scope> scopeStack = [new("global")];
     private readonly Stack<int> transactionStarts = [];
@@ -37,7 +29,6 @@ public sealed class ScopedSymbolTable
             scopeStack.RemoveAt(scopeStack.Count - 1);
     }
 
-    /// <summary>Tamaño en bytes para un tipo semántico.</summary>
     public static int SizeOf(string? dataType, string? value) => dataType switch
     {
         SemanticTypes.Integer => 4,
@@ -56,9 +47,6 @@ public sealed class ScopedSymbolTable
     private static int Align(int offset) =>
         (offset + Alignment - 1) / Alignment * Alignment;
 
-    /// <summary>
-    /// Declara en el ámbito actual, incluso si existe una variable externa con el mismo nombre.
-    /// </summary>
     public SymbolAssignment Declare(string name, string? dataType = null, string? value = null)
     {
         Scope scope = scopeStack[^1];
@@ -77,11 +65,7 @@ public sealed class ScopedSymbolTable
         return entry;
     }
 
-    /// <summary>
-    /// Asigna a la variable visible más cercana, o la declara si no existe.
-    /// Un tipo null conserva el tipo previo; un valor null sustituye el valor
-    /// previo porque el nuevo valor no se conoce durante el análisis.
-    /// </summary>
+    // Un tipo null conserva el anterior; un valor null invalida el valor conocido.
     public SymbolAssignment Assign(string name, string? dataType, string? value)
     {
         int index = FindVisibleIndex(name);
@@ -123,7 +107,6 @@ public sealed class ScopedSymbolTable
         undoActions.RemoveRange(start, undoActions.Count - start);
     }
 
-    /// <summary>Entrada de un identificador visible, o null si no existe.</summary>
     public SymbolAssignment? Lookup(string name)
     {
         int index = FindVisibleIndex(name);
@@ -140,11 +123,8 @@ public sealed class ScopedSymbolTable
         return -1;
     }
 
-    /// <summary>
-    /// Calcula un layout sin solapamientos a partir de los tamaños finales.
-    /// Los tipos desconocidos tienen tamaño 0, con una reserva simulada mínima de 4 bytes.
-    /// Las cadenas de valor desconocido solo tienen una estimación mínima de 2 bytes.
-    /// </summary>
+    // Direcciones simuladas, calculadas al finalizar el análisis, no reservas reales.
+    // Incluso los tipos desconocidos ocupan una reserva mínima de 4 bytes.
     public void AssignAddresses()
     {
         int offset = 0;

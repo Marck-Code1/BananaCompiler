@@ -1,12 +1,5 @@
 namespace BananaCompiler.Parser;
 
-/// <summary>
-/// Nodo del árbol de sintaxis (Syntax Tree).
-/// Cada nodo corresponde a un símbolo gramatical (no terminal) o a un
-/// terminal (token) cuando es hoja. Los nodos de expresión conservan además
-/// el <see cref="SemanticValue"/> inferido durante la reducción, de modo que
-/// el árbol sirve a la vez para diagnóstico sintáctico y semántico.
-/// </summary>
 public sealed class SyntaxNode
 {
     public SyntaxNode(string kind, Models.Token? token = null)
@@ -20,15 +13,12 @@ public sealed class SyntaxNode
         }
     }
 
-    /// <summary>Nombre gramatical: S, INICIO, INS, ASSIGN, EXP_OR, … o kind del token en hojas.</summary>
     public string Kind { get; }
 
-    /// <summary>Token origen. Solo presente en hojas (terminales).</summary>
     public Models.Token? Token { get; }
 
     public List<SyntaxNode> Children { get; } = [];
 
-    /// <summary>Tipo/valor inferido por la pila semántica (solo nodos EXP*).</summary>
     public SemanticValue? Semantic { get; set; }
 
     public int Line { get; set; }
@@ -48,7 +38,6 @@ public sealed class SyntaxNode
         return this;
     }
 
-    /// <summary>Impresión indentada del árbol, útil para depuración y para el reporte.</summary>
     public string ToTreeString(string indent = "")
     {
         var writer = new System.Text.StringBuilder();
@@ -70,7 +59,6 @@ public sealed class SyntaxNode
             child.AppendTo(writer, childIndent, false);
     }
 
-    /// <summary>Representación compacta tipo Lisp: (EXP_OR left || right).</summary>
     public string ToCompact()
     {
         if (IsLeaf)

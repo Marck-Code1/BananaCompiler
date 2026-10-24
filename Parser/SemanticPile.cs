@@ -1,49 +1,32 @@
 namespace BananaCompiler.Parser;
 
-/// <summary>
-/// Pila semántica didáctica / de trazabilidad (Semantic Pile).
-///
-/// <para>
-/// NO sustituye a <see cref="SemanticStack"/> (que es la pila real de
-/// atributos tipados usada en las reducciones). Esta clase existe para
-/// <b>visualizar la jerarquía matemática</b>: cada operador tiene un nivel
-/// de precedencia y una asociatividad (ver <see cref="PrecedenceOf"/>), y
-/// cada reducción queda registrada como texto legible más una foto de la
-/// pila. El parser crea una instancia por expresión y la vacía al terminar,
-/// igual que hace con la pila real.
-/// </para>
-/// </summary>
+// Registra la traza de las reducciones; los atributos tipados están en SemanticStack.
 public sealed class SemanticPile
 {
     private readonly List<string> entries = [];
     private readonly List<string> steps = [];
     private readonly List<string> snapshots = [];
 
-    /// <summary>Entradas actuales de la pila (operandos y resultados intermedios).</summary>
     public IReadOnlyList<string> Entries => entries;
 
-    /// <summary>Reducciones registradas, en orden: "a + b =&gt; Entero".</summary>
     public IReadOnlyList<string> Steps => steps;
 
-    /// <summary>Foto de la pila después de cada operación (para UI/depuración).</summary>
     public IReadOnlyList<string> Snapshots => snapshots;
 
     public int Count => entries.Count;
 
-    // ---- Tabla de jerarquía (mayor número = mayor precedencia) ----
-    // Refleja Docs/Grammar.md § "Tabla de precedencia resultante".
-    // Acepta tanto el kind del token (OA1, OR1, …) como el lexema (+, <, …).
+    // Un nivel mayor indica mayor precedencia; ver Docs/Grammar.md.
     public static int PrecedenceOf(string operatorKind) => operatorKind switch
     {
-        Models.TokenKinds.Power or "^" => 7,                        // ^  derecha
+        Models.TokenKinds.Power or "^" => 7,
         Models.TokenKinds.Multiply or Models.TokenKinds.Divide or Models.TokenKinds.Modulo
-            or "*" or "/" or "%" => 5,                              // *, /, %
-        Models.TokenKinds.Plus or Models.TokenKinds.Minus or "+" or "-" => 4, // + - binarios
-        Models.TokenKinds.Not or "!" => 3,                         // !  derecha
+            or "*" or "/" or "%" => 5,
+        Models.TokenKinds.Plus or Models.TokenKinds.Minus or "+" or "-" => 4,
+        Models.TokenKinds.Not or "!" => 3,
         Models.TokenKinds.LessThan or Models.TokenKinds.LessThanOrEqual or Models.TokenKinds.GreaterThan or Models.TokenKinds.GreaterThanOrEqual or Models.TokenKinds.Equal or Models.TokenKinds.NotEqual
-            or "<" or "<=" or ">" or ">=" or "==" or "!=" => 2,     // relacionales
-        Models.TokenKinds.And or "&&" => 1,                        // &&
-        Models.TokenKinds.Or or "||" => 0,                        // ||
+            or "<" or "<=" or ">" or ">=" or "==" or "!=" => 2,
+        Models.TokenKinds.And or "&&" => 1,
+        Models.TokenKinds.Or or "||" => 0,
         _ => -1,
     };
 
@@ -54,7 +37,6 @@ public sealed class SemanticPile
         _ => "izquierda",
     };
 
-    /// <summary>Descripción humana de la jerarquía, para reportes.</summary>
     public static string Describe(string operatorKind) =>
         $"op '{operatorKind}' nivel={PrecedenceOf(operatorKind)} assoc={AssociativityOf(operatorKind)}";
 
@@ -86,7 +68,6 @@ public sealed class SemanticPile
         Snapshot(step);
     }
 
-    /// <summary>Forma postfija (notación polaca inversa) acumulada hasta ahora.</summary>
     public string ToPostfix() => string.Join(" ", snapshots.Count == 0 ? [] : steps);
 
     public void Restore(int depth)

@@ -1,0 +1,10 @@
+flowchart TD
+    A[Edición del código Banana] --> B[Análisis léxico]
+    B --> C{¿Hay errores léxicos?}
+    C -- Sí --> D[Mostrar errores léxicos y omitir el parser]
+    C -- No --> E[Reconocimiento sintáctico en TopDownParser]
+    E --> F[Construcción del árbol y acciones semánticas]
+    F --> G[Comprobar nombres, tipos y contexto]
+    G --> H[Conservar símbolos y diagnósticos]
+    H --> I[Asignar direcciones simuladas]
+    I --> J[Mostrar tabla, errores y resumen]

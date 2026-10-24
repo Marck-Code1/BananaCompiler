@@ -36,7 +36,6 @@ public sealed class LexicalAnalyzer
 
     public List<Token> Tokenize(string source) => Tokenize(source, includeEndOfFile: false);
 
-    /// <summary>La opción EOF incluye la posición exacta del final del texto para los diagnósticos.</summary>
     public List<Token> Tokenize(string source, bool includeEndOfFile)
     {
         using StringReader reader = new(source);
@@ -62,7 +61,6 @@ public sealed class LexicalAnalyzer
         return tokens;
     }
 
-    // Recorrido por líneas
     private void ReadLine(ScanContext context, string line, int lineNumber)
     {
         context.CurrentLine = lineNumber;
@@ -118,7 +116,6 @@ public sealed class LexicalAnalyzer
         AppendSymbol(context, symbol, nextState.Value, columnNumber);
     }
 
-    // Formas especiales de tokens
     private int ReadString(ScanContext context, string line, int startIndex)
     {
         TryFinalizeCurrentLexeme(context);
@@ -143,7 +140,6 @@ public sealed class LexicalAnalyzer
         return line.Length - 1;
     }
 
-    // Transiciones y límites de tokens
     private bool ShouldCloseBeforeSymbol(ScanContext context, char symbol, string column, int nextState)
     {
         if (context.Lexeme.Length == 0 ||
@@ -181,7 +177,6 @@ public sealed class LexicalAnalyzer
     private static string GetColumn(char symbol) =>
         (symbol == ' ' || symbol == '\t') ? EndColumn : ((int)symbol).ToString();
 
-    // Ciclo de vida del lexema
     private static void ResetLine(ScanContext context)
     {
         ResetLexeme(context);
@@ -217,7 +212,6 @@ public sealed class LexicalAnalyzer
         return true;
     }
 
-    // Emisión de tokens
     private void AddTokenForState(ScanContext context, int state)
     {
         string token = transitionTable.GetToken(state) ?? TokenKinds.Error;
@@ -248,7 +242,6 @@ public sealed class LexicalAnalyzer
         context.CurrentState = InitialState;
     }
 
-    // Estado mutable de una lectura
     private sealed class ScanContext
     {
         public List<Token> Tokens { get; } = [];

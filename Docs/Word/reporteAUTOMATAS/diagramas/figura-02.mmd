@@ -1,0 +1,8 @@
+flowchart LR
+    A[Tokens de una producción] --> B[Reconocer componentes]
+    B --> C[Ejecutar acciones semánticas]
+    T[Tabla de símbolos y ámbitos activos] --> C
+    C --> D[Atributo de tipo]
+    C --> E[Declaraciones o asignaciones válidas]
+    C --> F[Árbol y traza de reducciones]
+    C --> G[Diagnósticos]

@@ -11,6 +11,8 @@ packages/
 *.suo
 *.userosscache
 *.sln.docstates
+*.sln.docstates.suo
+*.sln.DotSettings.user
 
 # Resultados de pruebas y cobertura
 TestResults/
@@ -24,6 +26,18 @@ coverage/
 *.bak
 Thumbs.db
 .DS_Store
+~$*
+
+# Cachés locales de los scripts de Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Variables de entorno locales (no publicar credenciales)
+.env
+.env.*
+!.env.example
 
 # Archivos auxiliares de SQLite (data.db es necesario para el lexer)
 *.db-shm

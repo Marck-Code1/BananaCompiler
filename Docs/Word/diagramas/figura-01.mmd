@@ -1,0 +1,16 @@
+flowchart TD
+    A[Programa fuente en el editor] --> B[Análisis léxico]
+    B --> C{Sin errores léxicos}
+    C -->|No| D[Mostrar errores léxicos]
+    C -->|Sí| E[TopDownParser: reconocimiento sintáctico]
+    E --> F[Acciones semánticas y pila de atributos]
+    F <--> G[Tabla de símbolos y ámbitos]
+    F --> H[Árbol con atributos y traza de reducciones]
+    F --> I[Diagnósticos semánticos]
+    G --> J[Asignación final de direcciones simuladas]
+    H --> K[ParseResult]
+    I --> K
+    J --> K
+    E --> L[Diagnósticos sintácticos]
+    L --> K
+    K --> M[Interfaz: símbolos, errores y resumen]

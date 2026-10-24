@@ -8,7 +8,6 @@ namespace BananaCompiler
 {
     public partial class Form1 : Form
     {
-
         private TransitionTable transitionTable = null!;
         internal Dictionary<string, Identifier> Identifiers = [];
         private List<Token> lexicalTokens = [];
@@ -49,7 +48,6 @@ namespace BananaCompiler
                 value = identificador;
                 Identifiers[lexeme] = value;
                 dgSimbolos.Rows.Add(identificador.Id, lexeme);
-
             }
             txtTokens.AddText(token + value.Id + ' ');
         }
@@ -76,9 +74,9 @@ namespace BananaCompiler
             }
         }
 
-        private void handleErrorToken(int line, string data)
+        private void handleErrorToken(int line, int column, string data)
         {
-            dgErrores.Rows.Add(line, data);
+            dgErrores.Rows.Add($"{line}:{column}", data);
             btnGuardarArchivo.Enabled = false;
         }
 
@@ -91,7 +89,7 @@ namespace BananaCompiler
                     handleIdToken(token.Kind, token.Lexeme);
                     break;
                 case TokenKinds.Error:
-                    handleErrorToken(token.Line, token.Lexeme);
+                    handleErrorToken(token.Line, token.Column, token.Lexeme);
                     handleToken(token.Kind);
                     break;
                 case TokenKinds.EndOfFile:
@@ -129,9 +127,7 @@ namespace BananaCompiler
         private void highlightErrors(Scintilla scintilla)
         {
             string text = scintilla.Text;
-            // Disable lexer (new API)
             scintilla.LexerName = null;
-            // Define style (red)
             scintilla.Styles[1].ForeColor = Color.Red;
             int index = 0;
             while ((index = text.IndexOf(TokenKinds.Error, index)) != -1)
@@ -274,6 +270,11 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
         private void btnGuardarArchivo_Click(object sender, EventArgs e)
         {
             saveTextToFile("Guardar archivo de tokens", txtTokens.Text);
+        }
+
+        private void lblLenguaje_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

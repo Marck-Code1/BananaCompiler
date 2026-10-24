@@ -1,6 +1,7 @@
 start
   sum = 0
   count = 1
+  value = 0
   do
     read value
     sum = sum + value

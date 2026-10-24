@@ -231,8 +231,9 @@ Durante el reconocimiento de cada expresión, el parser mantiene una pila de
 valores semánticos. Los factores apilan su tipo y valor; cada operador extrae
 sus operandos, valida la combinación de tipos y apila el resultado de la
 reducción. Las reducciones producen los tipos `Entero`, `Decimal`,
-`Exponencial`, `string` o `bool`; un identificador cuyo tipo todavía no se
-conoce se conserva como valor desconocido para permitir su uso posterior.
+`Exponencial`, `string` o `bool`. Un identificador debe existir en un ámbito
+visible y tener tipo; de lo contrario se informa un error y se propaga un
+atributo inválido para evitar errores derivados del mismo problema.
 
 La pila se vacía al terminar cada expresión y se restaura si la expresión
 contiene un error sintáctico. El resultado del parser expone los diagnósticos
@@ -244,6 +245,70 @@ dentro de ciclos.
 Los diagnósticos y la recuperación de instrucciones y bloques se describen en
 [Diagnostics.md](Diagnostics.md). La recuperación no convierte un programa
 con errores en uno válido ni hace que los saltos de línea terminen instrucciones.
+
+## Declaración implícita, tipos y ámbitos
+
+No se necesitan tipos escritos ni un operador de declaración distinto de `=`.
+La primera asignación **válida** a un nombre sin símbolo visible lo declara en
+el ámbito actual e infiere su tipo de la expresión. El lado derecho se analiza
+antes de crear el símbolo: `x = x + 1` es un error si `x` todavía no existe.
+
+Después de declarar una variable, su tipo queda fijo. Una asignación admite el
+mismo tipo o una ampliación numérica hacia el tipo del destino:
+
+| Tipo del destino | Tipos de origen admitidos |
+| --- | --- |
+| `Entero` | `Entero` |
+| `Decimal` | `Entero`, `Decimal` |
+| `Exponencial` | `Entero`, `Decimal`, `Exponencial` |
+| `string` | `string` |
+| `bool` | `bool` |
+
+Las expresiones numéricas infieren el tipo común más amplio en el orden
+`Entero < Decimal < Exponencial`. Una ampliación al asignar conserva el tipo
+del destino; no evalúa ni convierte valores en tiempo de ejecución. Una
+asignación incompatible no altera el tipo ni el valor registrado anteriormente.
+
+Los cuerpos de `if`, `else`, `while`, `do` y `for` tienen ámbitos locales.
+Una asignación actualiza el símbolo visible más cercano; solo declara cuando
+no encuentra ninguno. Al cerrar un ámbito sus nombres dejan de ser visibles,
+aunque sus entradas permanezcan en la tabla del reporte. El ámbito de `do`
+incluye su condición final.
+
+- `read x` exige que `x` ya esté declarada y tipada. Conserva su tipo y borra
+  su valor conocido. Para leer un entero: `x = 0` seguido de `read x`.
+- `rand x, límite` requiere un argumento numérico y produce un **entero**.
+  Puede declarar `x`; un destino existente debe admitir enteros según la tabla.
+  El valor queda desconocido: no se generan números aleatorios durante el análisis.
+- `for i from inicio to fin do ... endfor` exige dos límites numéricos y
+  declara un control **local** con su tipo común más amplio. El control oculta
+  un homónimo externo sin modificarlo. Los límites se analizan antes de
+  introducir el control, por lo que pueden consultar un homónimo externo.
+  Una cabecera inválida usa un enlace local marcado `<inválido>` únicamente
+  para recuperación, evitando usar un control externo o repetir errores en el cuerpo.
+
+```banana
+start
+  total = 0
+  value = 0
+  read value
+  total = total + value
+  rand dice, 6
+  for i from 1 to 3 do
+    write i + total
+  endfor
+end
+```
+
+El alcance es el análisis semántico: se comprueban nombres, tipos y contexto,
+pero no se ejecutan las instrucciones ni se calculan resultados matemáticos.
+`Samples/Valid/SemanticTypes.banana` reúne estas reglas en un ejemplo válido.
+En `Samples/InvalidDiagnostics` están `UndeclaredVariable.banana`,
+`InitialSelfReference.banana`, `OutOfScopeVariable.banana`,
+`IncompatibleAssignment.banana`, `ReadUndeclaredVariable.banana` y
+`InvalidRandDestination.banana` para comprobar los nuevos diagnósticos.
+
+## Correspondencia de tokens
 
 ```text
 ID -> identificador

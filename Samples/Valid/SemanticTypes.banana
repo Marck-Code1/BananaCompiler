@@ -1,0 +1,13 @@
+start
+  total = 0
+  value = 0
+  read value
+  total = total + value
+  average = 0.0
+  average = total
+  rand dice, 6
+  for i from 1 to 3 do
+    write i + total
+  endfor
+  write dice
+end
