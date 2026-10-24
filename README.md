@@ -33,20 +33,15 @@ Linux queda pendiente.
 | `Docs/` | Documentación de la gramática, diagnósticos y árbol sintáctico. |
 | `scripts/` | Herramientas auxiliares de documentación. |
 
-## Compilación y ejecución
+## Ejecución en Visual Studio
 
-En Windows, con el SDK y el runtime de .NET 8 instalados, ejecutar desde la raíz
-del repositorio:
+Utilizar Visual Studio 2022 con la carga de trabajo **Desarrollo de escritorio de
+.NET** y soporte para .NET 8.
 
-```powershell
-dotnet restore BananaCompiler.sln
-dotnet build BananaCompiler.sln
-dotnet run --project BananaCompiler.csproj
-```
-
-También se puede abrir `BananaCompiler.sln` en Visual Studio 2022 con la carga de
-trabajo **Desarrollo de escritorio de .NET** y seleccionar `BananaCompiler` como
-proyecto de inicio.
+1. Abrir `BananaCompiler.sln`.
+2. Esperar a que se restauren los paquetes de NuGet.
+3. Establecer `BananaCompiler` como proyecto de inicio.
+4. Ejecutar con **F5** o **Ctrl+F5** para iniciar sin depuración.
 
 `data.db` es necesaria para el análisis léxico y se copia automáticamente a la
 carpeta de salida durante la compilación. Los paquetes de NuGet se restauran
@@ -54,10 +49,7 @@ localmente; `bin/`, `obj/` y la configuración personal del IDE no se versionan.
 
 ## Pruebas
 
-En Windows:
-
-```powershell
-dotnet test BananaCompiler.Tests/BananaCompiler.Tests.csproj
-```
+En Visual Studio, abrir **Prueba → Explorador de pruebas** y seleccionar
+**Ejecutar todas las pruebas**. Las pruebas están en `BananaCompiler.Tests`.
 
 Más información en [BananaCompiler.Tests/README.md](BananaCompiler.Tests/README.md).
