@@ -9,12 +9,21 @@ namespace BananaCompiler
     public partial class Form1 : Form
     {
         private TransitionTable transitionTable = null!;
+        private readonly System.Windows.Forms.Timer analysisDebounceTimer;
         internal Dictionary<string, Identifier> Identifiers = [];
         private List<Token> lexicalTokens = [];
 
         public Form1()
         {
             InitializeComponent();
+
+            analysisDebounceTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 400,
+            };
+            components ??= new System.ComponentModel.Container();
+            components.Add(analysisDebounceTimer);
+            analysisDebounceTimer.Tick += analysisDebounceTimer_Tick;
 
             txtCode.Margins[0].Width = 16;
             txtTokens.Margins[0].Width = 16;
@@ -24,6 +33,7 @@ namespace BananaCompiler
             dgSimbolos.AllowUserToAddRows = false;
             dgErrores.AllowUserToAddRows = false;
             dgErroresSintacticos.AllowUserToAddRows = false;
+            dgCuadruplos.AllowUserToAddRows = false;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -148,9 +158,29 @@ namespace BananaCompiler
             dgSimbolos.Rows.Clear();
             dgErrores.Rows.Clear();
             dgErroresSintacticos.Rows.Clear();
+            tvArbolSintactico.Nodes.Clear();
+            rtbNotacionPrefija.Text = "";
+            txtInfija.Text = "";
+            rtbNotacionPostfija.Text = "";
+            dgCuadruplos.Rows.Clear();
+            rtbCodigo3D.Text = "";
+            txtCodigoP.Text = "";
+            rtbPilaSemantica.Text = "";
         }
 
         private void txtCode_TextChanged(object sender, EventArgs e)
+        {
+            analysisDebounceTimer.Stop();
+            analysisDebounceTimer.Start();
+        }
+
+        private void analysisDebounceTimer_Tick(object? sender, EventArgs e)
+        {
+            analysisDebounceTimer.Stop();
+            ProcesarCodigoFuente();
+        }
+
+        private void ProcesarCodigoFuente()
         {
             var sw = Stopwatch.StartNew();
             clearAll();
@@ -198,6 +228,10 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
             var parser = new TopDownParser(lexicalTokens);
             var result = parser.Parse();
             updateSimbolos(result.ScopedSymbols);
+            updateArbolYNotaciones(result.SyntaxTree);
+            updateCuadruplos(result.SyntaxTree);
+            updateCodigoP(result.SyntaxTree);
+            updatePilaSemantica(result);
 
             foreach (Diagnostic diagnostic in result.Diagnostics)
             {
@@ -219,6 +253,51 @@ Errores Sintácticos y Semánticos: {syntaxErrorCount}
             foreach (SyntaxNode child in node.Children)
                 count += CountNodes(child);
             return count;
+        }
+
+        private void updateArbolYNotaciones(SyntaxNode? root)
+        {
+            // Árbol visual y notaciones se actualizan juntos con cada análisis.
+            rtbNotacionPrefija.Text = NotacionesGenerator.Prefija(root);
+            txtInfija.Text = NotacionesGenerator.Infija(root);
+            rtbNotacionPostfija.Text = NotacionesGenerator.Postfija(root);
+
+            tvArbolSintactico.BeginUpdate();
+            tvArbolSintactico.Nodes.Clear();
+            TreeNode? treeRoot = AstTreeViewBuilder.Build(root);
+            if (treeRoot is not null)
+            {
+                tvArbolSintactico.Nodes.Add(treeRoot);
+                treeRoot.Expand();
+                if (treeRoot.Nodes.Count > 0)
+                    treeRoot.Nodes[0].Expand();
+            }
+            tvArbolSintactico.EndUpdate();
+        }
+
+        private void updateCuadruplos(SyntaxNode? root)
+        {
+            // Cuádruplos y código 3D se derivan del mismo AST validado.
+            IReadOnlyList<Cuadruplo> cuadruplos = CuadruplosGenerator.Generar(root);
+            dgCuadruplos.Rows.Clear();
+            int numero = 0;
+            foreach (Cuadruplo quad in cuadruplos)
+                dgCuadruplos.Rows.Add(++numero, quad.Op, quad.Arg1, quad.Arg2, quad.Resultado);
+            rtbCodigo3D.Text = CuadruplosGenerator.Codigo3D(cuadruplos);
+        }
+
+        private void updateCodigoP(SyntaxNode? root)
+        {
+            txtCodigoP.Text = root is null
+                ? string.Empty
+                : string.Join(Environment.NewLine, PCodeGenerator.Generar(root));
+        }
+
+        private void updatePilaSemantica(ParseResult result)
+        {
+            // Traza de reducciones que SemanticPile registró durante el análisis:
+            // cada registro llega como "L{linea}: {reducción con precedencia}".
+            rtbPilaSemantica.Text = string.Join(Environment.NewLine, result.SemanticPileLog);
         }
 
         private static int countRows(DataGridView grid)
